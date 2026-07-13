@@ -1,0 +1,34 @@
+const script = registerScript({
+    name: "${NAME}",
+    version: "1.0.0",
+    authors: ["${USER}"]
+});
+
+script.registerModule({
+    name: "${NAME}",
+    description: "Describe what this module does"
+}, (module) => {
+    module.addBool("Enabled", true);
+
+    module.on("enable", () => {
+        client.print("${NAME} enabled!");
+    });
+
+    module.on("preGameTick", () => {
+        if (mc.player === null || mc.world === null) return;
+        if (!module.getBool("Enabled")) return;
+
+        // Your per-tick logic here.
+    });
+
+    module.on("renderScreen", () => {
+        if (!module.getBool("Enabled")) return;
+
+        // Your HUD drawing here, e.g.:
+        // renderer.text("productsans-medium", "${NAME}", 10, 10, 8, renderer.color(255, 255, 255));
+    });
+
+    module.on("disable", () => {
+        client.print("${NAME} disabled!");
+    });
+});
