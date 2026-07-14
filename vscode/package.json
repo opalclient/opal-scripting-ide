@@ -1,0 +1,64 @@
+{
+  "name": "opal-scripting",
+  "displayName": "Opal Scripting",
+  "description": "IntelliSense, snippets, and scaffolding for Opal's GraalVM JavaScript scripting engine — hover docs and autocomplete for client, player, world, renderer, and every other ambient global, plus a script scaffolder.",
+  "version": "0.1.0",
+  "publisher": "opalclient",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "keywords": [
+    "opal",
+    "minecraft",
+    "scripting",
+    "graalvm",
+    "javascript"
+  ],
+  "activationEvents": [
+    "onLanguage:javascript",
+    "onCommand:opal.newScript",
+    "onCommand:opal.installTypeDefinitions"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "opal.newScript",
+        "title": "Opal: New Script",
+        "category": "Opal"
+      },
+      {
+        "command": "opal.installTypeDefinitions",
+        "title": "Opal: Install Type Definitions",
+        "category": "Opal"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "javascript",
+        "path": "./snippets/opal.code-snippets"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/opalclient/opal-scripting-ide.git",
+    "directory": "vscode"
+  }
+}

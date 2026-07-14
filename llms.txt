@@ -1,0 +1,32 @@
+# Opal Scripting IDE
+
+> Monorepo of editor tooling for writing Opal (Minecraft utility client) scripts: a VS Code
+> extension and a JetBrains plugin, both providing IntelliSense/snippets/scaffolding for Opal's
+> GraalVM JavaScript scripting API. The two plugins are independent projects sharing a repo and a
+> source-of-truth doc set (Opal's `resources/docs/en/scripting/`), not a shared codebase.
+
+## Root
+
+- [README.md](README.md): Monorepo overview — what each subproject is and how they relate.
+- [CLAUDE.md](CLAUDE.md): Mental model, patterns, and pitfalls for an AI assistant working in this repo.
+- [LICENSE](LICENSE): MIT license.
+
+## VS Code extension (vscode/)
+
+- [vscode/README.md](vscode/README.md): Install-from-source instructions, feature list, how the IntelliSense injection works.
+- [vscode/CHANGELOG.md](vscode/CHANGELOG.md): Version history.
+- [vscode/package.json](vscode/package.json): Extension manifest — commands, snippet contribution, activation events.
+- [vscode/src/extension.ts](vscode/src/extension.ts): Entry point — `Opal: New Script` and `Opal: Install Type Definitions` commands, the workspace `.vscode/opal.d.ts` + `jsconfig.json` injection logic.
+- [vscode/typings/opal-globals.d.ts](vscode/typings/opal-globals.d.ts): The ambient type definitions for every Opal scripting global — the actual API reference and the highest-value file in this repo.
+- [vscode/snippets/opal.code-snippets](vscode/snippets/opal.code-snippets): Boilerplate snippets (script scaffold, module registration, event handler, settings, palette view, overlay island).
+
+## JetBrains plugin (intellij/)
+
+- intellij/README.md: Install instructions and feature list (developed on a separate branch; see that branch for current contents).
+
+## Notes for agents
+
+- The two subprojects do not share code or a build step. Treat them as separate repos that happen
+  to live under one root.
+- The scripting API type definitions in both plugins are derived from external docs, not invented —
+  see CLAUDE.md's "Patterns that matter" section before adding or changing any method signature.

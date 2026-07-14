@@ -1,0 +1,151 @@
+{
+    "Opal: New Script (full boilerplate)": {
+        "prefix": "opal-script",
+        "scope": "javascript",
+        "description": "registerScript + registerModule boilerplate — the anatomy of every Opal script (see intro.mdx).",
+        "body": [
+            "const script = registerScript({",
+            "    name: \"${1:MyScript}\",",
+            "    version: \"1.0.0\",",
+            "    authors: [\"${2:You}\"]",
+            "});",
+            "",
+            "script.registerModule({",
+            "    name: \"${1:MyScript}\",",
+            "    description: \"${3:Describe what this module does}\"",
+            "}, (module) => {",
+            "    module.on(\"enable\", () => {",
+            "        client.print(\"${1:MyScript} enabled!\");",
+            "    });",
+            "",
+            "    module.on(\"disable\", () => {",
+            "        client.print(\"${1:MyScript} disabled!\");",
+            "    });",
+            "",
+            "    module.on(\"preGameTick\", () => {",
+            "        if (mc.player === null || mc.world === null) return;",
+            "        ${0:// per-tick logic runs 20 times/second}",
+            "    });",
+            "});",
+            ""
+        ]
+    },
+
+    "Opal: Register Module": {
+        "prefix": "opal-module",
+        "scope": "javascript",
+        "description": "script.registerModule(...) block — add another module to an existing script (see intro.mdx / events.mdx).",
+        "body": [
+            "script.registerModule({",
+            "    name: \"${1:ModuleName}\",",
+            "    description: \"${2:Describe what this module does}\"",
+            "}, (module) => {",
+            "    module.on(\"enable\", () => {",
+            "        client.print(\"${1:ModuleName} enabled!\");",
+            "    });",
+            "",
+            "    module.on(\"disable\", () => {",
+            "        client.print(\"${1:ModuleName} disabled!\");",
+            "    });",
+            "",
+            "    module.on(\"preGameTick\", () => {",
+            "        if (mc.player === null || mc.world === null) return;",
+            "        ${0:// per-tick logic runs 20 times/second}",
+            "    });",
+            "});"
+        ]
+    },
+
+    "Opal: Event Handler": {
+        "prefix": "opal-on",
+        "scope": "javascript",
+        "description": "module.on(event, handler) — registers a callback for a named event (see events.mdx for the full event table).",
+        "body": [
+            "module.on(\"${1|preGameTick,postGameTick,renderScreen,renderWorld,renderBloom,preMove,postMove,preMovementPacket,postMovementPacket,sendPacket,receivePacket,attack,swing,itemUse,jump,joinWorld,blockUpdate,serverConnect,serverDisconnect,chatReceived,keyPress,mousePress,resolutionChange|}\", (event) => {",
+            "    ${0:// see events.mdx for this event's payload and whether it is cancellable}",
+            "});"
+        ]
+    },
+
+    "Opal: Bool Setting": {
+        "prefix": "opal-bool",
+        "scope": "javascript",
+        "description": "addBool(name, defaultValue) — a toggle setting (see settings.mdx). Must be defined before module.on(...) calls.",
+        "body": [
+            "module.addBool(\"${1:Setting Name}\", ${2:true});"
+        ]
+    },
+
+    "Opal: Number Setting": {
+        "prefix": "opal-number",
+        "scope": "javascript",
+        "description": "addNumber(name, defaultValue, min, max, step) — a slider setting (see settings.mdx). Must be defined before module.on(...) calls.",
+        "body": [
+            "module.addNumber(\"${1:Setting Name}\", ${2:1.0}, ${3:0.1}, ${4:5.0}, ${5:0.1});"
+        ]
+    },
+
+    "Opal: Mode Setting": {
+        "prefix": "opal-mode",
+        "scope": "javascript",
+        "description": "addMode(name, options) — a dropdown setting (see settings.mdx). Must be defined before module.on(...) calls.",
+        "body": [
+            "module.addMode(\"${1:Mode}\", [\"${2:Vanilla}\", \"${3:NCP}\"]);"
+        ]
+    },
+
+    "Opal: Settings Group": {
+        "prefix": "opal-group",
+        "scope": "javascript",
+        "description": "addGroup(name, settingNames) — collapses previously-defined settings under a header. Call AFTER the settings it references (see settings.mdx).",
+        "body": [
+            "module.addGroup(\"${1:Group Name}\", [\"${2:Setting One}\", \"${3:Setting Two}\"]);"
+        ]
+    },
+
+    "Opal: Palette View": {
+        "prefix": "opal-palette",
+        "scope": "javascript",
+        "description": "palette.createView({...}) — a custom command-palette mini-app/game surface (see ui/palette.mdx).",
+        "body": [
+            "palette.createView({",
+            "    id: \"${1:my-view}\",",
+            "    title: \"${2:My View}\",",
+            "    description: \"${3:A custom palette view}\",",
+            "    footer: [{ key: \"Esc\", label: \"Close\" }],",
+            "    render: (x, y, w, h, dt) => {",
+            "        renderer.roundedRect(x, y, w, h, 8, renderer.color(10, 10, 18));",
+            "        renderer.text(\"productsans-bold\", \"${2:My View}\", x + 10, y + 18, 9, renderer.color(255, 255, 255));",
+            "        ${0:// dt is wall-clock seconds since the last frame — multiply velocities by it}",
+            "    },",
+            "    keyPressed: (keyCode, mods) => {",
+            "        if (keyCode === keys.SPACE) {",
+            "            // handle the key",
+            "        }",
+            "        return true; // consumed",
+            "    }",
+            "});",
+            "",
+            "palette.openView(\"${1:my-view}\");"
+        ]
+    },
+
+    "Opal: Overlay Island": {
+        "prefix": "opal-island",
+        "scope": "javascript",
+        "description": "overlay.createIsland({...}) — a custom Dynamic Island HUD element (see core/overlay in reference/core.mdx).",
+        "body": [
+            "const ${1:island} = overlay.createIsland({",
+            "    width: ${2:160},",
+            "    height: ${3:28},",
+            "    priority: ${4:10},",
+            "    render: (posX, posY, width, height, progress) => {",
+            "        renderer.roundedRect(posX, posY, width, height, 4, renderer.color(20, 20, 28, 220));",
+            "        renderer.text(\"productsans-bold\", \"${5:Custom HUD}\", posX + 10, posY + 14, 8, renderer.color(255, 255, 255));",
+            "    }",
+            "});",
+            "overlay.showIsland(${1:island});",
+            "$0"
+        ]
+    }
+}
