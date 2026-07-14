@@ -1,0 +1,120 @@
+<templateSet group="Opal Scripting">
+
+  <template name="opalscript" value="const script = registerScript({&#10;    name: &quot;$NAME$&quot;,&#10;    version: &quot;$VERSION$&quot;,&#10;    authors: [&quot;$AUTHOR$&quot;]&#10;});&#10;&#10;$END$" description="Opal: register a script entry point" toReformat="true" toShortenFQNames="true">
+    <variable name="NAME" expression="" defaultValue="&quot;My Script&quot;" alwaysStopAt="true"/>
+    <variable name="VERSION" expression="" defaultValue="&quot;1.0.0&quot;" alwaysStopAt="true"/>
+    <variable name="AUTHOR" expression="" defaultValue="&quot;User&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
+  <template name="opalmodule" value="script.registerModule({&#10;    name: &quot;$NAME$&quot;,&#10;    description: &quot;$DESCRIPTION$&quot;&#10;}, (module) =&gt; {&#10;    module.on(&quot;enable&quot;, () =&gt; {&#10;        $END$&#10;    });&#10;&#10;    module.on(&quot;disable&quot;, () =&gt; {&#10;    });&#10;});" description="Opal: register a module" toReformat="true" toShortenFQNames="true">
+    <variable name="NAME" expression="" defaultValue="&quot;MyModule&quot;" alwaysStopAt="true"/>
+    <variable name="DESCRIPTION" expression="" defaultValue="&quot;Description&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
+  <template name="opalevent" value="module.on(&quot;$EVENT$&quot;, (event) =&gt; {&#10;    $END$&#10;});" description="Opal: module event handler" toReformat="true" toShortenFQNames="true">
+    <variable name="EVENT" expression="" defaultValue="&quot;preGameTick&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
+  <template name="opalbool" value="module.addBool(&quot;$NAME$&quot;, $DEFAULT$);$END$" description="Opal: boolean (toggle) setting" toReformat="true" toShortenFQNames="true">
+    <variable name="NAME" expression="" defaultValue="&quot;Enabled&quot;" alwaysStopAt="true"/>
+    <variable name="DEFAULT" expression="" defaultValue="true" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
+  <template name="opalnumber" value="module.addNumber(&quot;$NAME$&quot;, $DEFAULT$, $MIN$, $MAX$, $STEP$);$END$" description="Opal: numeric (slider) setting" toReformat="true" toShortenFQNames="true">
+    <variable name="NAME" expression="" defaultValue="&quot;Speed&quot;" alwaysStopAt="true"/>
+    <variable name="DEFAULT" expression="" defaultValue="1.0" alwaysStopAt="true"/>
+    <variable name="MIN" expression="" defaultValue="0.1" alwaysStopAt="true"/>
+    <variable name="MAX" expression="" defaultValue="5.0" alwaysStopAt="true"/>
+    <variable name="STEP" expression="" defaultValue="0.1" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
+  <template name="opalmode" value="module.addMode(&quot;$NAME$&quot;, [&quot;$OPTION1$&quot;, &quot;$OPTION2$&quot;]);$END$" description="Opal: mode (dropdown) setting" toReformat="true" toShortenFQNames="true">
+    <variable name="NAME" expression="" defaultValue="&quot;Mode&quot;" alwaysStopAt="true"/>
+    <variable name="OPTION1" expression="" defaultValue="&quot;Vanilla&quot;" alwaysStopAt="true"/>
+    <variable name="OPTION2" expression="" defaultValue="&quot;NCP&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
+  <template name="opalgroup" value="module.addGroup(&quot;$GROUPNAME$&quot;, [&quot;$SETTING1$&quot;, &quot;$SETTING2$&quot;]);$END$" description="Opal: collapsible settings group" toReformat="true" toShortenFQNames="true">
+    <variable name="GROUPNAME" expression="" defaultValue="&quot;Options&quot;" alwaysStopAt="true"/>
+    <variable name="SETTING1" expression="" defaultValue="&quot;Setting1&quot;" alwaysStopAt="true"/>
+    <variable name="SETTING2" expression="" defaultValue="&quot;Setting2&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
+  <template name="opalsettings" value="module.addBool(&quot;$BOOLNAME$&quot;, $BOOLDEFAULT$);&#10;module.addNumber(&quot;$NUMNAME$&quot;, $NUMDEFAULT$, $NUMMIN$, $NUMMAX$, $NUMSTEP$);&#10;module.addMode(&quot;$MODENAME$&quot;, [&quot;$MODEOPT1$&quot;, &quot;$MODEOPT2$&quot;]);&#10;module.addGroup(&quot;$GROUPNAME$&quot;, [&quot;$BOOLNAME$&quot;, &quot;$NUMNAME$&quot;]);&#10;$END$" description="Opal: full settings block (bool + number + mode + group)" toReformat="true" toShortenFQNames="true">
+    <variable name="BOOLNAME" expression="" defaultValue="&quot;Enabled&quot;" alwaysStopAt="true"/>
+    <variable name="BOOLDEFAULT" expression="" defaultValue="true" alwaysStopAt="true"/>
+    <variable name="NUMNAME" expression="" defaultValue="&quot;Speed&quot;" alwaysStopAt="true"/>
+    <variable name="NUMDEFAULT" expression="" defaultValue="1.0" alwaysStopAt="true"/>
+    <variable name="NUMMIN" expression="" defaultValue="0.1" alwaysStopAt="true"/>
+    <variable name="NUMMAX" expression="" defaultValue="5.0" alwaysStopAt="true"/>
+    <variable name="NUMSTEP" expression="" defaultValue="0.1" alwaysStopAt="true"/>
+    <variable name="MODENAME" expression="" defaultValue="&quot;Mode&quot;" alwaysStopAt="true"/>
+    <variable name="MODEOPT1" expression="" defaultValue="&quot;Vanilla&quot;" alwaysStopAt="true"/>
+    <variable name="MODEOPT2" expression="" defaultValue="&quot;NCP&quot;" alwaysStopAt="true"/>
+    <variable name="GROUPNAME" expression="" defaultValue="&quot;Options&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
+  <template name="opalisland" value="const $VAR$ = overlay.createIsland({&#10;    width: $WIDTH$,&#10;    height: $HEIGHT$,&#10;    priority: $PRIORITY$,&#10;    render: (posX, posY, width, height, progress) =&gt; {&#10;        renderer.roundedRect(posX, posY, width, height, 4, renderer.color(20, 20, 28, 220));&#10;        $END$&#10;    }&#10;});&#10;overlay.showIsland($VAR$);" description="Opal: Dynamic Island HUD registration" toReformat="true" toShortenFQNames="true">
+    <variable name="VAR" expression="" defaultValue="&quot;island&quot;" alwaysStopAt="true"/>
+    <variable name="WIDTH" expression="" defaultValue="160" alwaysStopAt="true"/>
+    <variable name="HEIGHT" expression="" defaultValue="28" alwaysStopAt="true"/>
+    <variable name="PRIORITY" expression="" defaultValue="10" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
+  <template name="opalpalette" value="palette.createView({&#10;    id: &quot;$ID$&quot;,&#10;    title: &quot;$TITLE$&quot;,&#10;    description: &quot;$DESCRIPTION$&quot;,&#10;    render: (x, y, w, h, dt) =&gt; {&#10;        renderer.roundedRect(x, y, w, h, 8, renderer.color(10, 10, 18, 230));&#10;        $END$&#10;    },&#10;    keyPressed: (keyCode, mods) =&gt; {&#10;        return false;&#10;    }&#10;});&#10;palette.openView(&quot;$ID$&quot;);" description="Opal: command-palette view registration" toReformat="true" toShortenFQNames="true">
+    <variable name="ID" expression="" defaultValue="&quot;my-view&quot;" alwaysStopAt="true"/>
+    <variable name="TITLE" expression="" defaultValue="&quot;My View&quot;" alwaysStopAt="true"/>
+    <variable name="DESCRIPTION" expression="" defaultValue="&quot;Script view&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
+</templateSet>

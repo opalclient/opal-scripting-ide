@@ -1,0 +1,56 @@
+<idea-plugin>
+    <id>com.opalclient.scripting</id>
+    <name>Opal Scripting Support</name>
+    <vendor url="https://opal.wtf">Opal</vendor>
+
+    <description><![CDATA[
+    <p>Developer-experience tooling for writing <a href="https://opal.wtf">Opal</a> scripts: plain
+    <code>.js</code> files evaluated by Opal's GraalVM JavaScript scripting engine, which injects
+    global proxy objects (<code>client</code>, <code>player</code>, <code>world</code>,
+    <code>renderer</code>, <code>notification</code>, <code>overlay</code>, <code>modules</code>,
+    <code>mc</code>, <code>movement</code>, <code>rotation</code>, <code>inventory</code>,
+    <code>esp</code>, <code>palette</code>, and bound types like <code>BlockPos</code> /
+    <code>Vec2f</code> / <code>Color</code>) into every script's scope at runtime.</p>
+
+    <p>This plugin does not implement a custom language or PSI layer for Opal scripts -- they are
+    just JavaScript. Instead it leans on the JavaScript/TypeScript support already built into
+    IntelliJ IDEA and WebStorm:</p>
+
+    <ul>
+        <li><b>Ambient type definitions</b> -- an <code>opal-globals.d.ts</code> file, scaffolded or
+        refreshed into your project, gives the IDE's native JS engine full completion, parameter
+        hints, and quick documentation for every proxy global, with no build step or import
+        required.</li>
+        <li><b>Live templates</b> ("Opal Scripting" group) for module registration, event handlers,
+        settings (bool/number/mode/group), overlay islands, and command-palette views.</li>
+        <li><b>File | New | Opal Script</b> scaffolds a starter script with working
+        registerScript/registerModule boilerplate.</li>
+    </ul>
+    ]]></description>
+
+    <idea-version since-build="241" until-build="252.*"/>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <internalFileTemplate name="Opal Script"/>
+        <defaultLiveTemplates file="/liveTemplates/OpalScripting.xml"/>
+        <notificationGroup id="Opal Scripting" displayType="BALLOON"/>
+    </extensions>
+
+    <actions>
+        <action id="OpalScripting.NewOpalScript"
+                class="com.opalclient.scripting.actions.NewOpalScriptAction"
+                text="Opal Script"
+                description="Create a new Opal scripting engine script (.js)">
+            <add-to-group group-id="NewGroup" anchor="after" relative-to-action="NewFile"/>
+        </action>
+
+        <action id="OpalScripting.InsertGlobals"
+                class="com.opalclient.scripting.actions.InsertOpalGlobalsAction"
+                text="Insert/Update Opal Type Definitions"
+                description="Copies or refreshes opal-globals.d.ts in the project root so the IDE can autocomplete Opal's scripting API">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>
