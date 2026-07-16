@@ -21,8 +21,11 @@
  * `import`/`export`, which is what keeps TypeScript treating it as a global
  * script rather than a module).
  *
- * Scripts run full-trust with no sandbox — see `intro.mdx`. This file only
- * describes the *shape* of the API, not a security boundary.
+ * Scripts run sandboxed (GraalVM `HostAccess.EXPLICIT`): only members
+ * explicitly annotated `@HostAccess.Export` on the proxy globals below, plus
+ * a small JDK allow-list, are reachable from script code — see `intro.mdx`.
+ * This file only describes the *shape* of that exposed API, not the sandbox
+ * boundary itself.
  */
 
 /* ============================================================================
@@ -188,8 +191,11 @@ interface TextComponent {
     getString(): string;
 }
 
-/** Raw Minecraft entity (from `world.getEntities()`, `world.getLivingEntitiesInRange()`,
- * or an event's `getTarget()`). Opaque aside from the documented member below. */
+/** Raw Minecraft entity (from `world.getEntities()` or
+ * `world.getLivingEntitiesInRange()`). Opaque aside from the documented
+ * member below — `attack`'s target is exposed via `AttackEvent`'s own
+ * primitive getters (`getTargetName()`, `getTargetId()`, ...) rather than a
+ * raw `Entity`. */
 interface Entity {
     getName(): TextComponent;
 }
@@ -217,10 +223,6 @@ type Box = AABB;
 /** Opaque server address, from `serverConnect`'s `getServerAddress()`. */
 interface ServerAddress {
     readonly __opalServerAddressBrand?: never;
-}
-/** Opaque raw network packet, from packet-event `getPacket()`. */
-interface Packet {
-    readonly __opalPacketBrand?: never;
 }
 /** Opaque frame draw context, from render-event `drawContext()`. */
 interface GuiGraphicsExtractor {
@@ -304,6 +306,32 @@ interface KeysGlobal {
 declare const keys: KeysGlobal;
 
 /* ============================================================================
+ * timer — stopwatch helper (reference/core.mdx "Timer Proxy")
+ * ========================================================================== */
+
+/** Stopwatch handle returned by `timer.create()`. Tracks elapsed time since
+ * the last `reset()` (or since creation, if never reset). */
+interface Stopwatch {
+    /** Resets the elapsed-time baseline to now. */
+    reset(): void;
+    /** Milliseconds elapsed since the last `reset()` (or creation). */
+    elapsed(): number;
+    /** Whether at least `ms` milliseconds have elapsed since the last reset. */
+    passed(ms: number): boolean;
+    /** `passed(ms)`, and if true, also resets the baseline — the common
+     * "has enough time gone by? if so, restart the clock" rate-limit check. */
+    passedAndReset(ms: number): boolean;
+}
+
+interface TimerProxy {
+    /** Creates a new stopwatch, its baseline starting at the moment of creation. */
+    create(): Stopwatch;
+    /** Current engine time in milliseconds — a raw timestamp, not tied to any stopwatch. */
+    now(): number;
+}
+declare const timer: TimerProxy;
+
+/* ============================================================================
  * Events (events.mdx) — payload objects passed to module.on(name, handler)
  * ========================================================================== */
 
@@ -372,8 +400,11 @@ interface PostMoveEvent {
 
 /** `preMovementPacket` — before the movement packet is sent. Getters read the
  * values about to be sent; setters rewrite them before the packet leaves
- * (server-side position/rotation spoofing). Cancellable. */
-interface PreMovementPacketEvent extends CancellableEvent {
+ * (server-side position/rotation spoofing). Cancellable — note the accessor
+ * names (`isCancelled()` / `cancel()`) are distinct from the older
+ * `CancellableEvent.setCancelled()` shape used by `preMove`/`serverConnect`;
+ * the two event families are not interchangeable. */
+interface PreMovementPacketEvent {
     getX(): number;
     getY(): number;
     getZ(): number;
@@ -394,6 +425,10 @@ interface PreMovementPacketEvent extends CancellableEvent {
     isForceInput(): boolean;
     /** Forces the packet to be sent even when no movement occurred. */
     setForceInput(forceInput: boolean): void;
+    /** Whether the event has already been cancelled by another handler. */
+    isCancelled(): boolean;
+    /** Cancels the event — the movement packet is dropped and never sent. Cannot be un-set once called. */
+    cancel(): void;
 }
 
 /** `postMovementPacket` — read-only subset describing what was actually sent.
@@ -409,10 +444,16 @@ interface PostMovementPacketEvent {
 }
 
 /** Shared payload for all four packet events — cancelling drops the packet
- * so vanilla never sends/handles it. */
-interface PacketEvent extends CancellableEvent {
-    /** The raw Minecraft packet this event wraps (inbound or outbound depending on the event). */
-    getPacket(): Packet;
+ * so vanilla never sends/handles it. Note the accessor names (`isCancelled()`
+ * / `cancel()`) are distinct from the older `CancellableEvent.setCancelled()`
+ * shape used by `preMove`/`serverConnect`. */
+interface PacketEvent {
+    /** Simple class name of the wrapped packet, e.g. `"ServerboundMovePlayerPacket"`. */
+    getType(): string;
+    /** Whether the event has already been cancelled by another handler. */
+    isCancelled(): boolean;
+    /** Cancels the event — the packet is dropped and never sent/handled. Cannot be un-set once called. */
+    cancel(): void;
 }
 /** A packet is about to be sent to the server. Cancellable. */
 interface SendPacketEvent extends PacketEvent {}
@@ -425,8 +466,16 @@ interface InstantaneousReceivePacketEvent extends PacketEvent {}
 
 /** `attack` — the player attacks an entity, before the interaction is processed. Not cancellable. */
 interface AttackEvent {
-    /** The entity being attacked. */
-    getTarget(): Entity;
+    /** Display name of the entity being attacked. */
+    getTargetName(): string;
+    /** Entity id of the target. */
+    getTargetId(): number;
+    /** Target's current health, or `-1` if the target is not a living entity. */
+    getTargetHealth(): number;
+    /** Target's maximum health, or `-1` if the target is not a living entity. */
+    getTargetMaxHealth(): number;
+    /** Distance to the target, or `-1` if unavailable. */
+    getTargetDistance(): number;
 }
 
 /** `swing` — a record; read fields with bare accessors, no `get` prefix. Not cancellable. */
@@ -438,12 +487,18 @@ interface SwingEvent {
 /** `itemUse` — the player uses (right-clicks) the held item. Carries no data. Not cancellable. */
 interface ItemUseEvent {}
 
-/** `jump` — before the jump impulse is applied. Cancellable. */
-interface JumpEvent extends CancellableEvent {
+/** `jump` — before the jump impulse is applied. Cancellable — note the
+ * accessor names (`isCancelled()` / `cancel()`) are distinct from the older
+ * `CancellableEvent.setCancelled()` shape used by `preMove`/`serverConnect`. */
+interface JumpEvent {
     /** Whether the player is sprinting while jumping. */
     isSprinting(): boolean;
     /** Overrides whether the jump is treated as a sprint jump, changing the forward boost applied. */
     setSprinting(sprinting: boolean): void;
+    /** Whether the event has already been cancelled by another handler. */
+    isCancelled(): boolean;
+    /** Cancels the event — the jump impulse never applies. Cannot be un-set once called. */
+    cancel(): void;
 }
 
 /** `joinWorld` — the local player joins a world, after the client world is initialised. Carries no data. */
@@ -468,14 +523,20 @@ interface ServerConnectEvent extends CancellableEvent {
 /** `serverDisconnect` — the client disconnects from a server. Carries no data. */
 interface ServerDisconnectEvent {}
 
-/** `chatReceived` — a chat message is received from the server, before it is shown. Cancellable. */
-interface ChatReceivedEvent extends CancellableEvent {
-    /** The received chat message. Use `.getString()` for plain text. */
-    getText(): TextComponent;
+/** `chatReceived` — a chat message is received from the server, before it is shown. Cancellable —
+ * note the accessor names (`isCancelled()` / `cancel()`) are distinct from the older
+ * `CancellableEvent.setCancelled()` shape used by `preMove`/`serverConnect`. */
+interface ChatReceivedEvent {
+    /** The received chat message as plain text. */
+    getMessage(): string;
     /** Whether the message is an action-bar overlay message rather than a chat-line message. */
     isOverlay(): boolean;
     /** Reroutes the message to (true) or away from (false) the action bar. */
     setOverlay(overlay: boolean): void;
+    /** Whether the event has already been cancelled by another handler. */
+    isCancelled(): boolean;
+    /** Cancels the event — the message is never shown. Cannot be un-set once called. */
+    cancel(): void;
 }
 
 /** Shared shape of `keyPress` / `mousePress` — both expose the GLFW code through the same accessor. */
@@ -632,6 +693,11 @@ interface ClientProxy {
     isModuleEnabled(id: string): boolean;
     /** Toggles a module on or off. */
     setModuleEnabled(id: string, enabled: boolean): void;
+
+    /** Sends a chat message to the server, exactly as if typed in the chat box. */
+    sendChat(message: string): void;
+    /** Runs a client command. The leading `/` is optional — `"toggle Fly"` and `"/toggle Fly"` both work. */
+    runCommand(command: string): void;
 
     /** Width of the game window in scaled virtual pixels (affected by GUI scale). */
     getScaledWidth(): number;

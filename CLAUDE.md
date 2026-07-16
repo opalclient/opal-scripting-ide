@@ -50,9 +50,10 @@ either plugin should trace back to a `<Method>` tag in those docs, not to guessw
     governance touched by whichever agent gets there first — keep edits to them minimal and
     single-purpose so they're easy for a human to reconcile across the two branches.
 - Don't add a `checkJs`-on-by-default posture to the VS Code IntelliSense setup — Opal scripts are
-  loose JS with full-trust Java interop, and turning on strict checking globally would flood users
-  who haven't opted in with noise. Type information should be additive (hover/autocomplete), not
-  enforcement, unless a user explicitly adds `// @ts-check` to their own file.
+  loose JS calling into a sandboxed, unchecked-at-compile-time Java interop surface, and turning on
+  strict checking globally would flood users who haven't opted in with noise. Type information
+  should be additive (hover/autocomplete), not enforcement, unless a user explicitly adds
+  `// @ts-check` to their own file.
 - Don't fabricate API surface. If a doc page doesn't mention a method, it doesn't go in the type
   definitions — an incomplete-but-accurate `.d.ts` is far more useful than a complete-but-wrong one,
   since a wrong signature actively misleads autocomplete.

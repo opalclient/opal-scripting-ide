@@ -230,7 +230,10 @@ interface OpalPostMoveEvent {
     getMovementInput(): Vec3d;
 }
 
-interface OpalPreMovementPacketEvent extends OpalCancellable {
+/** Note the cancel accessor names (`isCancelled()` / `cancel()`) are distinct
+ * from the older `OpalCancellable.setCancelled()` shape used by
+ * `preMove`/`serverConnect` — the two event families are not interchangeable. */
+interface OpalPreMovementPacketEvent {
     getX(): number;
     getY(): number;
     getZ(): number;
@@ -249,6 +252,10 @@ interface OpalPreMovementPacketEvent extends OpalCancellable {
     setHorizontalCollision(horizontalCollision: boolean): void;
     isForceInput(): boolean;
     setForceInput(forceInput: boolean): void;
+    /** Whether the event has already been cancelled by another handler. */
+    isCancelled(): boolean;
+    /** Cancels the event — the movement packet is dropped and never sent. Cannot be un-set once called. */
+    cancel(): void;
 }
 
 interface OpalPostMovementPacketEvent {
@@ -261,15 +268,30 @@ interface OpalPostMovementPacketEvent {
     isSprinting(): boolean;
 }
 
-/** Shared payload for sendPacket / receivePacket / instantaneous* packet events. */
-interface OpalPacketEvent extends OpalCancellable {
-    /** The raw Minecraft packet this event wraps (inbound or outbound depending on the event). */
-    getPacket(): JavaPacket;
+/** Shared payload for sendPacket / receivePacket / instantaneous* packet
+ * events. Note the cancel accessor names (`isCancelled()` / `cancel()`) are
+ * distinct from the older `OpalCancellable.setCancelled()` shape used by
+ * `preMove`/`serverConnect`. */
+interface OpalPacketEvent {
+    /** Simple class name of the wrapped packet, e.g. `"ServerboundMovePlayerPacket"`. */
+    getType(): string;
+    /** Whether the event has already been cancelled by another handler. */
+    isCancelled(): boolean;
+    /** Cancels the event — the packet is dropped and never sent/handled. Cannot be un-set once called. */
+    cancel(): void;
 }
 
 interface OpalAttackEvent {
-    /** The entity being attacked. */
-    getTarget(): Entity;
+    /** Display name of the entity being attacked. */
+    getTargetName(): string;
+    /** Entity id of the target. */
+    getTargetId(): number;
+    /** Target's current health, or `-1` if the target is not a living entity. */
+    getTargetHealth(): number;
+    /** Target's maximum health, or `-1` if the target is not a living entity. */
+    getTargetMaxHealth(): number;
+    /** Distance to the target, or `-1` if unavailable. */
+    getTargetDistance(): number;
 }
 
 interface OpalSwingEvent {
@@ -277,10 +299,17 @@ interface OpalSwingEvent {
     hand(): InteractionHand;
 }
 
-interface OpalJumpEvent extends OpalCancellable {
+/** Note the cancel accessor names (`isCancelled()` / `cancel()`) are distinct
+ * from the older `OpalCancellable.setCancelled()` shape used by
+ * `preMove`/`serverConnect`. */
+interface OpalJumpEvent {
     isSprinting(): boolean;
     /** Overrides whether the jump is treated as a sprint jump. */
     setSprinting(sprinting: boolean): void;
+    /** Whether the event has already been cancelled by another handler. */
+    isCancelled(): boolean;
+    /** Cancels the event — the jump impulse never applies. Cannot be un-set once called. */
+    cancel(): void;
 }
 
 interface OpalBlockUpdateEvent {
@@ -293,13 +322,20 @@ interface OpalServerConnectEvent extends OpalCancellable {
     getServerAddress(): ServerAddress;
 }
 
-interface OpalChatReceivedEvent extends OpalCancellable {
-    /** The message as a text Component. Use `.getString()` for plain text. */
-    getText(): Component;
+/** Note the cancel accessor names (`isCancelled()` / `cancel()`) are distinct
+ * from the older `OpalCancellable.setCancelled()` shape used by
+ * `preMove`/`serverConnect`. */
+interface OpalChatReceivedEvent {
+    /** The received chat message as plain text. */
+    getMessage(): string;
     /** Whether this is an action-bar overlay message rather than a chat-line message. */
     isOverlay(): boolean;
     /** Reroutes the message to (true) or away from (false) the action bar. */
     setOverlay(overlay: boolean): void;
+    /** Whether the event has already been cancelled by another handler. */
+    isCancelled(): boolean;
+    /** Cancels the event — the message is never shown. Cannot be un-set once called. */
+    cancel(): void;
 }
 
 interface OpalKeyPressEvent {
@@ -330,6 +366,11 @@ interface ClientProxy {
     isModuleEnabled(id: string): boolean;
     /** Toggles a module on or off. */
     setModuleEnabled(id: string, enabled: boolean): void;
+
+    /** Sends a chat message to the server, exactly as if typed in the chat box. */
+    sendChat(message: string): void;
+    /** Runs a client command. The leading "/" is optional — "toggle Fly" and "/toggle Fly" both work. */
+    runCommand(command: string): void;
 
     /** Width of the game window in scaled virtual pixels (affected by GUI scale). */
     getScaledWidth(): number;
@@ -1058,6 +1099,33 @@ interface OpalKeys {
 declare const keys: OpalKeys;
 
 // ---------------------------------------------------------------------------
+// timer — stopwatch helper
+// ---------------------------------------------------------------------------
+
+/** Stopwatch handle returned by `timer.create()`. Tracks elapsed time since
+ * the last `reset()` (or since creation, if never reset). */
+interface OpalStopwatch {
+    /** Resets the elapsed-time baseline to now. */
+    reset(): void;
+    /** Milliseconds elapsed since the last `reset()` (or creation). */
+    elapsed(): number;
+    /** Whether at least `ms` milliseconds have elapsed since the last reset. */
+    passed(ms: number): boolean;
+    /** `passed(ms)`, and if true, also resets the baseline — the common
+     * "has enough time gone by? if so, restart the clock" rate-limit check. */
+    passedAndReset(ms: number): boolean;
+}
+
+interface OpalTimer {
+    /** Creates a new stopwatch, its baseline starting at the moment of creation. */
+    create(): OpalStopwatch;
+    /** Current engine time in milliseconds — a raw timestamp, not tied to any stopwatch. */
+    now(): number;
+}
+
+declare const timer: OpalTimer;
+
+// ---------------------------------------------------------------------------
 // Bound Java interop types (see world/types.mdx)
 // ---------------------------------------------------------------------------
 
@@ -1173,7 +1241,6 @@ interface BlockState {}
 interface Block {}
 interface HitResult {}
 interface ServerAddress {}
-interface JavaPacket {}
 interface RenderCanvas {}
 interface GuiGraphicsExtractor {}
 interface PoseStack {}
