@@ -4,6 +4,24 @@ All notable changes to the Opal Scripting VS Code extension are documented in th
 
 ## [Unreleased]
 
+### Changed
+
+- Finished event payload coverage and unified the cancel API. `PreMoveEvent`, `PostMoveEvent`,
+  `ServerConnectEvent`, `BlockUpdateEvent`, `KeyPressEvent`/`MousePressEvent`, and `SwingEvent` now
+  describe the actual `@HostAccess.Export` surface the sandbox exposes, not the raw (unwrapped)
+  Java event: `PreMoveEvent`/`PostMoveEvent` expose `getSpeed()` + `getInputX/Y/Z()` instead of a
+  `Vec3d`-returning `getMovementInput()`; `ServerConnectEvent` exposes `getHost()`/`getPort()`/
+  `getAddress()` instead of an opaque `getServerAddress()`; `BlockUpdateEvent` exposes
+  `getX/Y/Z()` + `getOldBlock()`/`getNewBlock()` instead of raw `BlockPos`/`BlockState` getters;
+  `KeyPressEvent`/`MousePressEvent` expose `getCode()` (was `getInteractionCode()`); `SwingEvent`
+  exposes `isMainHand()` (was a bare `hand()` accessor returning `InteractionHand`). The
+  now-unreachable `ServerAddress` opaque type was removed along with it.
+- Eliminated the old `CancellableEvent.setCancelled()` shape entirely. Every cancellable event
+  payload (`PreMoveEvent`, `PreMovementPacketEvent`, `PacketEvent` and its four subtypes,
+  `JumpEvent`, `ServerConnectEvent`, `ChatReceivedEvent`) now extends the same
+  `CancellableEvent { isCancelled(): boolean; cancel(): void }` — there is no longer a second,
+  interchangeable-looking cancel shape to trip over.
+
 ### Added
 
 - Ambient type definitions (`typings/opal-globals.d.ts`) covering every documented scripting

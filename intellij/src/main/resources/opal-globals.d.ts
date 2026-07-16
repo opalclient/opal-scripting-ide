@@ -180,12 +180,14 @@ interface OpalModule {
 // Event payloads
 // ---------------------------------------------------------------------------
 
-/** Base shape shared by every cancellable event payload. */
+/** Base shape shared by every cancellable event payload. Every cancellable
+ * payload in this file extends this interface; there is no separate
+ * accessor shape to worry about. */
 interface OpalCancellable {
-    /** Marks the event cancelled. The flag cannot be cleared once set. */
-    setCancelled(): void;
     /** Whether the event has already been cancelled by another handler. */
     isCancelled(): boolean;
+    /** Cancels the event. The flag cannot be cleared once set. */
+    cancel(): void;
 }
 
 /** Lifecycle / lifecycle-adjacent events that carry no data (see the table in events.mdx). */
@@ -222,18 +224,22 @@ interface OpalRenderBloomEvent {
 
 interface OpalPreMoveEvent extends OpalCancellable {
     getSpeed(): number;
-    getMovementInput(): Vec3d;
+    /** X component of the directional movement input for the step. */
+    getInputX(): number;
+    /** Y component of the directional movement input for the step. */
+    getInputY(): number;
+    /** Z component of the directional movement input for the step. */
+    getInputZ(): number;
 }
 
 interface OpalPostMoveEvent {
     getSpeed(): number;
-    getMovementInput(): Vec3d;
+    getInputX(): number;
+    getInputY(): number;
+    getInputZ(): number;
 }
 
-/** Note the cancel accessor names (`isCancelled()` / `cancel()`) are distinct
- * from the older `OpalCancellable.setCancelled()` shape used by
- * `preMove`/`serverConnect` — the two event families are not interchangeable. */
-interface OpalPreMovementPacketEvent {
+interface OpalPreMovementPacketEvent extends OpalCancellable {
     getX(): number;
     getY(): number;
     getZ(): number;
@@ -252,10 +258,6 @@ interface OpalPreMovementPacketEvent {
     setHorizontalCollision(horizontalCollision: boolean): void;
     isForceInput(): boolean;
     setForceInput(forceInput: boolean): void;
-    /** Whether the event has already been cancelled by another handler. */
-    isCancelled(): boolean;
-    /** Cancels the event — the movement packet is dropped and never sent. Cannot be un-set once called. */
-    cancel(): void;
 }
 
 interface OpalPostMovementPacketEvent {
@@ -269,16 +271,10 @@ interface OpalPostMovementPacketEvent {
 }
 
 /** Shared payload for sendPacket / receivePacket / instantaneous* packet
- * events. Note the cancel accessor names (`isCancelled()` / `cancel()`) are
- * distinct from the older `OpalCancellable.setCancelled()` shape used by
- * `preMove`/`serverConnect`. */
-interface OpalPacketEvent {
+ * events. */
+interface OpalPacketEvent extends OpalCancellable {
     /** Simple class name of the wrapped packet, e.g. `"ServerboundMovePlayerPacket"`. */
     getType(): string;
-    /** Whether the event has already been cancelled by another handler. */
-    isCancelled(): boolean;
-    /** Cancels the event — the packet is dropped and never sent/handled. Cannot be un-set once called. */
-    cancel(): void;
 }
 
 interface OpalAttackEvent {
@@ -295,57 +291,55 @@ interface OpalAttackEvent {
 }
 
 interface OpalSwingEvent {
-    /** The hand performing the swing (record accessor, no `get` prefix). */
-    hand(): InteractionHand;
+    /** Whether the main hand (as opposed to the off hand) is swinging. */
+    isMainHand(): boolean;
 }
 
-/** Note the cancel accessor names (`isCancelled()` / `cancel()`) are distinct
- * from the older `OpalCancellable.setCancelled()` shape used by
- * `preMove`/`serverConnect`. */
-interface OpalJumpEvent {
+interface OpalJumpEvent extends OpalCancellable {
     isSprinting(): boolean;
     /** Overrides whether the jump is treated as a sprint jump. */
     setSprinting(sprinting: boolean): void;
-    /** Whether the event has already been cancelled by another handler. */
-    isCancelled(): boolean;
-    /** Cancels the event — the jump impulse never applies. Cannot be un-set once called. */
-    cancel(): void;
 }
 
 interface OpalBlockUpdateEvent {
-    getPos(): BlockPos;
-    getOldState(): BlockState;
-    getNewState(): BlockState;
+    /** X coordinate where the block change occurred. */
+    getX(): number;
+    /** Y coordinate where the block change occurred. */
+    getY(): number;
+    /** Z coordinate where the block change occurred. */
+    getZ(): number;
+    /** Display name of the block before the update (e.g. "Air", "Stone"). */
+    getOldBlock(): string;
+    /** Display name of the block after the update (e.g. "Air", "Stone"). */
+    getNewBlock(): string;
 }
 
 interface OpalServerConnectEvent extends OpalCancellable {
-    getServerAddress(): ServerAddress;
+    /** Hostname or IP of the server being connected to. */
+    getHost(): string;
+    /** Port of the server being connected to. */
+    getPort(): number;
+    /** Combined `host:port` address of the server being connected to. */
+    getAddress(): string;
 }
 
-/** Note the cancel accessor names (`isCancelled()` / `cancel()`) are distinct
- * from the older `OpalCancellable.setCancelled()` shape used by
- * `preMove`/`serverConnect`. */
-interface OpalChatReceivedEvent {
+interface OpalChatReceivedEvent extends OpalCancellable {
     /** The received chat message as plain text. */
     getMessage(): string;
     /** Whether this is an action-bar overlay message rather than a chat-line message. */
     isOverlay(): boolean;
     /** Reroutes the message to (true) or away from (false) the action bar. */
     setOverlay(overlay: boolean): void;
-    /** Whether the event has already been cancelled by another handler. */
-    isCancelled(): boolean;
-    /** Cancels the event — the message is never shown. Cannot be un-set once called. */
-    cancel(): void;
 }
 
 interface OpalKeyPressEvent {
     /** GLFW key code of the pressed key. */
-    getInteractionCode(): number;
+    getCode(): number;
 }
 
 interface OpalMousePressEvent {
     /** GLFW button code of the pressed mouse button. */
-    getInteractionCode(): number;
+    getCode(): number;
 }
 
 // ---------------------------------------------------------------------------
@@ -1240,7 +1234,6 @@ interface AABB {}
 interface BlockState {}
 interface Block {}
 interface HitResult {}
-interface ServerAddress {}
 interface RenderCanvas {}
 interface GuiGraphicsExtractor {}
 interface PoseStack {}

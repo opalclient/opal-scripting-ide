@@ -220,10 +220,6 @@ interface AABB {
 }
 /** Alias — `interaction.mdx` calls this type `Box`, `player.mdx` calls it `AABB`. Same object. */
 type Box = AABB;
-/** Opaque server address, from `serverConnect`'s `getServerAddress()`. */
-interface ServerAddress {
-    readonly __opalServerAddressBrand?: never;
-}
 /** Opaque frame draw context, from render-event `drawContext()`. */
 interface GuiGraphicsExtractor {
     readonly __opalGuiGraphicsExtractorBrand?: never;
@@ -335,14 +331,16 @@ declare const timer: TimerProxy;
  * Events (events.mdx) — payload objects passed to module.on(name, handler)
  * ========================================================================== */
 
-/** Base shape shared by every cancellable event. Calling `setCancelled()` on
- * a non-cancellable event throws, since the method does not exist on that
- * payload — only call it on events documented as cancellable. */
+/** Base shape shared by every cancellable event. Calling `cancel()` on a
+ * non-cancellable event throws, since the method does not exist on that
+ * payload — only call it on events documented as cancellable. Every
+ * cancellable payload in this file extends this interface; there is no
+ * separate accessor shape to worry about. */
 interface CancellableEvent {
-    /** Marks the event cancelled. Cannot be un-set once called. */
-    setCancelled(): void;
     /** Whether the event has already been cancelled by another handler. */
     isCancelled(): boolean;
+    /** Cancels the event. Cannot be un-set once called. */
+    cancel(): void;
 }
 
 /** `enable/disable` lifecycle events receive no argument at all. */
@@ -390,21 +388,25 @@ interface RenderBloomEvent {
 interface PreMoveEvent extends CancellableEvent {
     /** Movement speed for the step. */
     getSpeed(): number;
-    /** Directional movement input vector for the step. */
-    getMovementInput(): Vec3d;
+    /** X component of the directional movement input for the step. */
+    getInputX(): number;
+    /** Y component of the directional movement input for the step. */
+    getInputY(): number;
+    /** Z component of the directional movement input for the step. */
+    getInputZ(): number;
 }
+/** `postMove` — read-only subset describing the movement that was just applied. Not cancellable. */
 interface PostMoveEvent {
     getSpeed(): number;
-    getMovementInput(): Vec3d;
+    getInputX(): number;
+    getInputY(): number;
+    getInputZ(): number;
 }
 
 /** `preMovementPacket` — before the movement packet is sent. Getters read the
  * values about to be sent; setters rewrite them before the packet leaves
- * (server-side position/rotation spoofing). Cancellable — note the accessor
- * names (`isCancelled()` / `cancel()`) are distinct from the older
- * `CancellableEvent.setCancelled()` shape used by `preMove`/`serverConnect`;
- * the two event families are not interchangeable. */
-interface PreMovementPacketEvent {
+ * (server-side position/rotation spoofing). Cancellable. */
+interface PreMovementPacketEvent extends CancellableEvent {
     getX(): number;
     getY(): number;
     getZ(): number;
@@ -425,10 +427,6 @@ interface PreMovementPacketEvent {
     isForceInput(): boolean;
     /** Forces the packet to be sent even when no movement occurred. */
     setForceInput(forceInput: boolean): void;
-    /** Whether the event has already been cancelled by another handler. */
-    isCancelled(): boolean;
-    /** Cancels the event — the movement packet is dropped and never sent. Cannot be un-set once called. */
-    cancel(): void;
 }
 
 /** `postMovementPacket` — read-only subset describing what was actually sent.
@@ -444,16 +442,10 @@ interface PostMovementPacketEvent {
 }
 
 /** Shared payload for all four packet events — cancelling drops the packet
- * so vanilla never sends/handles it. Note the accessor names (`isCancelled()`
- * / `cancel()`) are distinct from the older `CancellableEvent.setCancelled()`
- * shape used by `preMove`/`serverConnect`. */
-interface PacketEvent {
+ * so vanilla never sends/handles it. */
+interface PacketEvent extends CancellableEvent {
     /** Simple class name of the wrapped packet, e.g. `"ServerboundMovePlayerPacket"`. */
     getType(): string;
-    /** Whether the event has already been cancelled by another handler. */
-    isCancelled(): boolean;
-    /** Cancels the event — the packet is dropped and never sent/handled. Cannot be un-set once called. */
-    cancel(): void;
 }
 /** A packet is about to be sent to the server. Cancellable. */
 interface SendPacketEvent extends PacketEvent {}
@@ -478,27 +470,21 @@ interface AttackEvent {
     getTargetDistance(): number;
 }
 
-/** `swing` — a record; read fields with bare accessors, no `get` prefix. Not cancellable. */
+/** `swing` — the player swings an arm. Not cancellable. */
 interface SwingEvent {
-    /** The hand performing the swing. */
-    hand(): InteractionHand;
+    /** Whether the main hand (as opposed to the off hand) is swinging. */
+    isMainHand(): boolean;
 }
 
 /** `itemUse` — the player uses (right-clicks) the held item. Carries no data. Not cancellable. */
 interface ItemUseEvent {}
 
-/** `jump` — before the jump impulse is applied. Cancellable — note the
- * accessor names (`isCancelled()` / `cancel()`) are distinct from the older
- * `CancellableEvent.setCancelled()` shape used by `preMove`/`serverConnect`. */
-interface JumpEvent {
+/** `jump` — before the jump impulse is applied. Cancellable. */
+interface JumpEvent extends CancellableEvent {
     /** Whether the player is sprinting while jumping. */
     isSprinting(): boolean;
     /** Overrides whether the jump is treated as a sprint jump, changing the forward boost applied. */
     setSprinting(sprinting: boolean): void;
-    /** Whether the event has already been cancelled by another handler. */
-    isCancelled(): boolean;
-    /** Cancels the event — the jump impulse never applies. Cannot be un-set once called. */
-    cancel(): void;
 }
 
 /** `joinWorld` — the local player joins a world, after the client world is initialised. Carries no data. */
@@ -506,43 +492,45 @@ interface JoinWorldEvent {}
 
 /** `blockUpdate` — a loaded block changes state. Not cancellable. */
 interface BlockUpdateEvent {
-    /** Position where the block change occurred. */
-    getPos(): BlockPos;
-    /** Block state before the update. */
-    getOldState(): BlockState;
-    /** Block state after the update. */
-    getNewState(): BlockState;
+    /** X coordinate where the block change occurred. */
+    getX(): number;
+    /** Y coordinate where the block change occurred. */
+    getY(): number;
+    /** Z coordinate where the block change occurred. */
+    getZ(): number;
+    /** Display name of the block before the update (e.g. "Air", "Stone"). */
+    getOldBlock(): string;
+    /** Display name of the block after the update (e.g. "Air", "Stone"). */
+    getNewBlock(): string;
 }
 
 /** `serverConnect` — before connecting to a multiplayer server. Cancel to abort the connection. */
 interface ServerConnectEvent extends CancellableEvent {
-    /** The address being connected to. */
-    getServerAddress(): ServerAddress;
+    /** Hostname or IP of the server being connected to. */
+    getHost(): string;
+    /** Port of the server being connected to. */
+    getPort(): number;
+    /** Combined `host:port` address of the server being connected to. */
+    getAddress(): string;
 }
 
 /** `serverDisconnect` — the client disconnects from a server. Carries no data. */
 interface ServerDisconnectEvent {}
 
-/** `chatReceived` — a chat message is received from the server, before it is shown. Cancellable —
- * note the accessor names (`isCancelled()` / `cancel()`) are distinct from the older
- * `CancellableEvent.setCancelled()` shape used by `preMove`/`serverConnect`. */
-interface ChatReceivedEvent {
+/** `chatReceived` — a chat message is received from the server, before it is shown. Cancellable. */
+interface ChatReceivedEvent extends CancellableEvent {
     /** The received chat message as plain text. */
     getMessage(): string;
     /** Whether the message is an action-bar overlay message rather than a chat-line message. */
     isOverlay(): boolean;
     /** Reroutes the message to (true) or away from (false) the action bar. */
     setOverlay(overlay: boolean): void;
-    /** Whether the event has already been cancelled by another handler. */
-    isCancelled(): boolean;
-    /** Cancels the event — the message is never shown. Cannot be un-set once called. */
-    cancel(): void;
 }
 
 /** Shared shape of `keyPress` / `mousePress` — both expose the GLFW code through the same accessor. */
 interface InteractionCodeEvent {
     /** GLFW key code (keyPress) or mouse button code (mousePress) that triggered the event. */
-    getInteractionCode(): number;
+    getCode(): number;
 }
 /** `keyPress` — a keyboard key is pressed. Not cancellable. */
 interface KeyPressEvent extends InteractionCodeEvent {}
