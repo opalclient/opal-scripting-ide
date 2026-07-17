@@ -18,10 +18,11 @@ This is a monorepo of two independent editor integrations built against the same
   experience for JetBrains editors: ambient type definitions, live templates, and a matching
   new-script action.
 
-Both integrations are generated from the same ground truth: the scripting docs shipped in
+Both integrations are hand-maintained against the same ground truth: the scripting docs shipped in
 `resources/docs/en/scripting/` in the main Opal client repository (events, settings, and one
-reference page per proxy global). If the runtime API changes, that's where the fix starts. The
-editor tooling here should be regenerated to match, not hand-patched to disagree with it.
+reference page per proxy global), verified against the Java proxies that actually run. There is no
+generator yet — each plugin's type definitions are written and updated by hand. If the runtime API
+changes, update the docs first, then bring both plugins back in line.
 
 ## Repository layout
 
@@ -42,6 +43,40 @@ and scaffold command all run against a plain `.js` workspace; see `vscode/README
 (Marketplace publishing, an extension icon). The JetBrains plugin builds and packages with
 `./gradlew buildPlugin`; see `intellij/README.md` for its current status and the Gradle/IntelliJ
 Platform version it targets.
+
+## Installing from a release
+
+Tagged releases on GitHub attach both plugins as prebuilt files, so you can install without a build:
+
+- **VS Code** (`.vsix`): download the `opal-scripting-*.vsix` asset, open the Extensions view, click
+  the `...` menu, choose **Install from VSIX...**, and point it at the file. From a terminal the
+  same thing is `code --install-extension opal-scripting-<version>.vsix`.
+- **JetBrains** (`.zip`): download the `opal-scripting-intellij-*.zip` asset, then open
+  **Settings / Preferences -> Plugins -> gear icon -> Install Plugin from Disk...** in IntelliJ IDEA
+  or WebStorm and select the zip. Leave it zipped; the IDE reads the packaged form. Restart when
+  prompted.
+
+Neither plugin is on its marketplace yet, so the release assets are how you install a build you
+didn't compile yourself.
+
+## Building the artifacts
+
+To produce those same files locally, for a release or to test a change:
+
+- **VS Code `.vsix`** — from `vscode/`:
+  ```bash
+  npm install
+  npm run compile
+  npx vsce package        # writes opal-scripting-<version>.vsix
+  ```
+- **JetBrains zip** — from `intellij/`:
+  ```bash
+  ./gradlew buildPlugin    # or gradlew.bat on Windows
+  # writes build/distributions/opal-scripting-intellij-<version>.zip
+  ```
+
+Attach the two files to the GitHub Release for the tag. Each subproject's README covers running from
+source and iterating in a live dev host.
 
 ## For AI agents
 

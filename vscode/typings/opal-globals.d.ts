@@ -38,8 +38,8 @@
  * So three rules hold everywhere here, and a type that breaks one is a bug:
  *   • Getters, never properties. `box.getX()`, not `box.x`. `mc.getPlayer()`,
  *     not `mc.player`.
- *   • Containers are `ScriptList<T>` — `size()`/`isEmpty()`/`get(i)` only.
- *     Never an array, never iterable.
+ *   • Containers are `ScriptList<T>` — a read-only array (`length`, `[i]`,
+ *     `for..of`, spread) that also keeps `size()`/`isEmpty()`/`get(i)`.
  *   • A type modelled as an opaque brand (`HitResult`, `ClientLevel`) has no
  *     readable members at all, deliberately. Do not add speculative ones.
  *
@@ -101,6 +101,7 @@ interface Vec2f {
     getYaw(): number;
     /** Pitch angle (vertical rotation) in degrees. */
     getPitch(): number;
+    toString(): string;
 }
 declare const Vec2f: {
     new (yaw: number, pitch: number): Vec2f;
@@ -117,6 +118,7 @@ interface BlockPos {
     getZ(): number;
     /** Returns a new BlockPos shifted one block in the given direction. */
     offset(direction: Direction): BlockPos;
+    toString(): string;
 }
 declare const BlockPos: {
     new (x: number, y: number, z: number): BlockPos;
@@ -135,6 +137,7 @@ interface Direction {
     getOpposite(): Direction;
     /** Lowercase direction name. */
     getName(): DirectionName;
+    toString(): string;
 }
 
 /**
@@ -151,6 +154,7 @@ interface RaytracedRotation {
     getPitch(): number;
     /** Raw hit result — pass to `mc.interactionManager.interactBlock()`. */
     getHitResult(): HitResult;
+    toString(): string;
 }
 
 /**
@@ -258,6 +262,7 @@ interface Effect {
     isAmbient(): boolean;
     /** Packed ARGB color of the effect's particles. */
     getColor(): ARGBColor;
+    toString(): string;
 }
 
 /**
@@ -305,6 +310,7 @@ interface Entity {
     getEffect(name: string): Effect | null;
     /** Every active effect on this entity. Empty for a non-living entity. */
     getEffects(): ScriptList<Effect>;
+    toString(): string;
 }
 /** A living entity (mob or player). Same wrapper — `isLiving()` reports which. */
 type LivingEntity = Entity;
@@ -328,6 +334,7 @@ interface ItemStack {
     getMaxDamage(): number;
     /** Whether this stack is a placeable block. */
     isBlock(): boolean;
+    toString(): string;
 }
 
 /**
@@ -357,24 +364,29 @@ interface ClientLevel {
 /**
  * A container as seen from script code — the `ScriptList` wrapper.
  *
- * **Not an array, and not iterable.** `HostAccess.EXPLICIT` grants no
- * container access, so a raw `java.util.List` handed to a script is completely
- * inert; this wrapper exports exactly the three members below. `list.length`,
- * `list[0]`, `for..of`, `.map`, and the spread operator do not work on one.
- * Walk it with an index:
+ * **A read-only array.** It reports a `length`, answers index access
+ * (`list[0]`), iterates under `for..of`, and works with spread (`[...list]`)
+ * and `Array.from(list)`. The `size()`/`isEmpty()`/`get(i)` methods stay for
+ * back-compat and read the same, with `get(i)` bounds-safe where a raw `[i]`
+ * past the end is `undefined`. Two limits: it is read-only, so `list[0] = x`
+ * and `push` are refused; and the `Array.prototype` helpers (`map`, `filter`,
+ * `reduce`) are not on it — spread into a real array first, `[...list].map(...)`.
  *
  * ```js
  * const entities = world.getLivingEntitiesInRange(16);
- * for (let i = 0; i < entities.size(); i++) {
- *     const entity = entities.get(i);
+ * for (const entity of entities) {
+ *     // ...
  * }
  * ```
  */
 interface ScriptList<T> {
-    size(): number;
-    isEmpty(): boolean;
+    readonly length: number;
+    readonly [index: number]: T;
     /** Bounds-safe: an out-of-range index returns `null` rather than throwing. */
     get(index: number): T | null;
+    size(): number;
+    isEmpty(): boolean;
+    [Symbol.iterator](): IterableIterator<T>;
 }
 
 /**
@@ -400,6 +412,38 @@ interface ScriptImage {
     getWidth(): number;
     /** Pixel height, or `0` when invalid. */
     getHeight(): number;
+    toString(): string;
+}
+
+/**
+ * A compiled chat-line template — the `ScriptCriteria` wrapper, returned by
+ * `client.criteria(pattern)`. Compile a pattern once (each call builds a regex)
+ * and reuse the handle across chat events.
+ *
+ * A pattern mixes literal text with `${name}` placeholders. `"<${player}> ${message}"`
+ * binds `player` and `message`; every other character matches literally, so the
+ * angle brackets are just text. `match` hands back the named captures, or `null`
+ * when the line does not fit the shape.
+ *
+ * The matcher is bounded so an untrusted chat line cannot stall the client: a
+ * line over 1024 characters never matches, and a pattern with more than 16
+ * placeholders throws back at `client.criteria`.
+ *
+ * ```js
+ * const greeting = client.criteria("<${player}> ${message}");
+ * module.on("chatReceived", (event) => {
+ *     const m = greeting.match(event.getMessage());
+ *     if (m) client.print(m.player + " said " + m.message);
+ * });
+ * ```
+ */
+interface ScriptCriteria {
+    /** Named captures keyed by placeholder (`m.player`), or `null` on no match. The captures object is read-only. */
+    match(line: string): Readonly<Record<string, string>> | null;
+    /** Whether `line` matches the template, without building a captures object. */
+    test(line: string): boolean;
+    /** The original template string this was compiled from. */
+    getPattern(): string;
     toString(): string;
 }
 
@@ -500,42 +544,33 @@ interface PreGameTickEvent {}
 /** Fired at the end of a tick, after vanilla tick logic has run. Carries no data. */
 interface PostGameTickEvent {}
 
-/** `renderScreen` — fired during the 2D HUD pass. A record; use bare accessors. */
 /**
- * The `renderScreen` payload.
- *
- * **Nothing on it is readable.** The handler is passed the raw
- * `RenderScreenEvent` record, which carries no `@HostAccess.Export`, so every
- * member call on it throws `Unknown identifier` — `drawContext()`, `canvas()`,
- * `mouseX()`, `mouseY()` and `tickDelta()` all included. Declare the handler
- * with no parameter and read what you need from the globals instead:
- * `client.getTickDelta()` for the partial tick, and the `renderer` global for
- * drawing (it targets the frame's canvas for you).
+ * The `renderScreen` payload, wrapping the runtime `ScriptRenderScreenEvent`.
+ * Fired during the 2D HUD pass, the one render pass that also carries the
+ * cursor position. Draw through the `renderer` global; it already targets the
+ * frame's canvas.
  */
-interface RenderScreenEvent {
-    readonly __opalRenderScreenEventBrand?: never;
+interface ScriptRenderScreenEvent {
+    /** Fractional progress through the current tick, in `[0, 1)`. Matches `client.getTickDelta()` for this frame; use it to interpolate motion. */
+    getPartialTicks(): number;
+    /** Cursor x in GUI-scaled coordinates. */
+    getMouseX(): number;
+    /** Cursor y in GUI-scaled coordinates. */
+    getMouseY(): number;
+    toString(): string;
 }
 
-/** `renderWorld` — fired during the 3D world pass. Use `esp.*` for projection here. */
 /**
- * The `renderWorld` payload. **Nothing on it is readable** — same reason as
- * `RenderScreenEvent`: the raw record carries no `@HostAccess.Export`, so
- * `matrixStack()` and `tickDelta()` both throw. Use `client.getTickDelta()`.
+ * The payload for the two tick-only render passes, `renderWorld` and
+ * `renderBloom`, wrapping the runtime `ScriptRenderEvent`. It carries the
+ * partial tick but no cursor position, which belongs to the screen pass. Use
+ * `esp.*` for world-space projection under `renderWorld`; shapes drawn under
+ * `renderBloom` feed the glow pass instead of showing directly.
  */
-interface RenderWorldEvent {
-    readonly __opalRenderWorldEventBrand?: never;
-}
-
-/** `renderBloom` — fired during the HUD bloom pass. Shapes drawn here feed
- * the glow/bloom effect rather than showing directly. */
-/**
- * The `renderBloom` payload. **Nothing on it is readable** — same reason as
- * `RenderScreenEvent`: the raw record carries no `@HostAccess.Export`, so
- * `drawContext()`, `canvas()` and `tickDelta()` all throw. Use
- * `client.getTickDelta()`.
- */
-interface RenderBloomEvent {
-    readonly __opalRenderBloomEventBrand?: never;
+interface ScriptRenderEvent {
+    /** Fractional progress through the current tick, in `[0, 1)`. Interpolate positions against it for a smooth trail. */
+    getPartialTicks(): number;
+    toString(): string;
 }
 
 /** `preMove` / `postMove` payload. Cancellable only on `preMove`. */
@@ -727,9 +762,9 @@ interface ScriptModuleEvents {
     disable: () => void;
     preGameTick: (event: PreGameTickEvent) => void;
     postGameTick: (event: PostGameTickEvent) => void;
-    renderScreen: (event: RenderScreenEvent) => void;
-    renderWorld: (event: RenderWorldEvent) => void;
-    renderBloom: (event: RenderBloomEvent) => void;
+    renderScreen: (event: ScriptRenderScreenEvent) => void;
+    renderWorld: (event: ScriptRenderEvent) => void;
+    renderBloom: (event: ScriptRenderEvent) => void;
     preMove: (event: PreMoveEvent) => void;
     postMove: (event: PostMoveEvent) => void;
     preMovementPacket: (event: PreMovementPacketEvent) => void;
@@ -849,6 +884,9 @@ interface ClientProxy {
     /** Runs a client command. The leading `/` is optional — `"toggle Fly"` and `"/toggle Fly"` both work. */
     runCommand(command: string): void;
 
+    /** Compiles a reusable chat-line matcher. `${name}` placeholders capture; every other character matches literally. Compile once and reuse the handle across chat events. */
+    criteria(pattern: string): ScriptCriteria;
+
     /** Width of the game window in scaled virtual pixels (affected by GUI scale). */
     getScaledWidth(): number;
     /** Height of the game window in scaled virtual pixels. */
@@ -955,11 +993,11 @@ interface ModulesProxy {
     /** Sets whether a module should be visible in the arraylist/HUD. */
     setVisible(id: string, visible: boolean): void;
 
-    /** Display names of all registered modules, both native and script-defined. A `ScriptList`, not an array — walk it with `size()`/`get(i)`. */
+    /** Display names of all registered modules, both native and script-defined, as a `ScriptList<string>`. */
     listAll(): ScriptList<string>;
-    /** Display names of all modules in the given category. A `ScriptList`, not an array. */
+    /** Display names of all modules in the given category, as a `ScriptList<string>`. */
     listCategory(category: ModuleCategory): ScriptList<string>;
-    /** Display names of all currently enabled modules. A `ScriptList`, not an array — `listEnabled().size()`, never `.length`. */
+    /** Display names of all currently enabled modules, as a `ScriptList<string>`. */
     listEnabled(): ScriptList<string>;
 }
 declare const modules: ModulesProxy;
@@ -1089,7 +1127,7 @@ interface PlayerProxy {
     hasEffect(name: string): boolean;
     /** The named active effect, or `null` if the player does not have it. */
     getEffect(name: string): Effect | null;
-    /** Every effect currently active on the player. A `ScriptList`, not an array. */
+    /** Every effect currently active on the player, as a `ScriptList<Effect>`. */
     getEffects(): ScriptList<Effect>;
 
     /** Whether the next attack would land a critical hit (falling, not on ground, not in water, etc.). */
@@ -1247,6 +1285,8 @@ interface InventoryProxy {
     findItem(itemName: string): number;
     /** Searches the full inventory (0-35) for an item by display-name substring (case-insensitive). Returns `-1` if not found. */
     findItemInInventory(itemName: string): number;
+    /** Searches the hotbar (0-8) for an item by its stable registry id (`"diamond"` or `"minecraft:diamond"`). The id-keyed counterpart to `findItem`, correct for logic where display names are locale-dependent. Returns `-1` if not found. */
+    findItemById(id: string): number;
 
     /** Item stack in the given hotbar slot. */
     getStack(slot: number): ItemStack | null;
@@ -1264,6 +1304,8 @@ interface InventoryProxy {
     getItemCount(slot: number): number;
     /** Total count of a specific item across the whole inventory (display-name substring, case-insensitive). */
     countItem(itemName: string): number;
+    /** Total count of an item across the whole inventory (0-35) by its stable registry id (`"diamond"` or `"minecraft:diamond"`). The id-keyed counterpart to `countItem`. */
+    countItemById(id: string): number;
     /** Total placeable blocks across the hotbar and off hand. */
     countBlocks(): number;
 }

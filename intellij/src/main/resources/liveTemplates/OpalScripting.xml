@@ -117,4 +117,49 @@
     </context>
   </template>
 
+  <template name="opalcriteria" value="const $NAME$ = client.criteria(&quot;&lt;$${player}&gt; $${message}&quot;);&#10;&#10;module.on(&quot;chatReceived&quot;, (event) =&gt; {&#10;    const m = $NAME$.match(event.getMessage());&#10;    if (m === null) return;&#10;    $END$&#10;});" description="Opal: chat criteria matcher + chatReceived filter" toReformat="true" toShortenFQNames="true">
+    <variable name="NAME" expression="" defaultValue="&quot;greeting&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
+  <template name="opalmanifest" value="// ==OpalScript==&#10;// @name       $NAME$&#10;// @version    $VERSION$&#10;// @author     $AUTHOR$&#10;// @minClient  $MINCLIENT$&#10;// @capability $CAPABILITY$&#10;// ==/OpalScript==&#10;$END$" description="Opal: script manifest header (parsed, optional)" toReformat="false" toShortenFQNames="true">
+    <variable name="NAME" expression="" defaultValue="&quot;My Script&quot;" alwaysStopAt="true"/>
+    <variable name="VERSION" expression="" defaultValue="&quot;1.0.0&quot;" alwaysStopAt="true"/>
+    <variable name="AUTHOR" expression="" defaultValue="&quot;User&quot;" alwaysStopAt="true"/>
+    <variable name="MINCLIENT" expression="" defaultValue="&quot;26.2&quot;" alwaysStopAt="true"/>
+    <variable name="CAPABILITY" expression="" defaultValue="&quot;render, chat&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
+  <template name="opalrender" value="module.on(&quot;renderScreen&quot;, (event) =&gt; {&#10;    const $DELTA$ = event.getPartialTicks();&#10;    renderer.text(&quot;productsans-bold&quot;, &quot;$TEXT$&quot;, $X$, $Y$, 9, renderer.color(255, 255, 255));&#10;    $END$&#10;});" description="Opal: renderScreen handler (partial tick + cursor)" toReformat="true" toShortenFQNames="true">
+    <variable name="DELTA" expression="" defaultValue="&quot;tickDelta&quot;" alwaysStopAt="true"/>
+    <variable name="TEXT" expression="" defaultValue="&quot;Hello&quot;" alwaysStopAt="true"/>
+    <variable name="X" expression="" defaultValue="10" alwaysStopAt="true"/>
+    <variable name="Y" expression="" defaultValue="10" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
+  <template name="opallist" value="const $LIST$ = $SOURCE$;&#10;for (const $ITEM$ of $LIST$) {&#10;    $END$&#10;}" description="Opal: for..of over a ScriptList (now iterable)" toReformat="true" toShortenFQNames="true">
+    <variable name="LIST" expression="" defaultValue="&quot;entities&quot;" alwaysStopAt="true"/>
+    <variable name="SOURCE" expression="" defaultValue="&quot;world.getLivingEntitiesInRange(16)&quot;" alwaysStopAt="true"/>
+    <variable name="ITEM" expression="" defaultValue="&quot;entity&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="OTHER" value="true"/>
+      <option name="JS_EXPRESSION" value="true"/>
+      <option name="JS_STATEMENT" value="true"/>
+    </context>
+  </template>
+
 </templateSet>

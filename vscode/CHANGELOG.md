@@ -13,13 +13,13 @@ All notable changes to the Opal Scripting VS Code extension are documented in th
   form always read `undefined`, silently defeating every `mc.player === null` guard written
   against it. `getPlayer()` now returns a readable `Entity`; `getWorld()` returns an opaque,
   memberless `ClientLevel` token good only for a null check. The `LocalPlayer` type is gone.
-- **BREAKING: collections are `ScriptList<T>`, not arrays.** `ScriptList` is
-  `{ size(); isEmpty(); get(i) }` and is **not** iterable — the old `JavaList<T> extends
-  Iterable<T>` with `.length` and index access described an API that never existed
-  (`HostAccess.EXPLICIT` grants no container access). Affects `modules.listAll`/`listCategory`/
-  `listEnabled` (previously typed `string[]`, outright wrong), `player.getEffects`,
-  `world.getEntities`/`getLivingEntitiesInRange`/`getAdjacentDirections`, `renderer.wrapText`,
-  and `movement.yawPos` (previously typed as a `[number, number]` tuple).
+- **BREAKING: collections are `ScriptList<T>`.** It keeps `size()`/`isEmpty()`/`get(i)` and now
+  also reads as a **read-only array** — `length`, `[i]`, `for..of`, spread, and `Array.from` work,
+  backed by a host-controlled `ProxyArray` (not the old fictional `JavaList<T> extends Iterable<T>`
+  with an unchecked `.length`); writes and `Array.prototype` helpers like `.map` are not on it.
+  Affects `modules.listAll`/`listCategory`/`listEnabled` (previously typed `string[]`, outright
+  wrong), `player.getEffects`, `world.getEntities`/`getLivingEntitiesInRange`/`getAdjacentDirections`,
+  `renderer.wrapText`, and `movement.yawPos` (previously typed as a `[number, number]` tuple).
 - **BREAKING: geometry and item types are wrappers with getters, not property bags.** `Vector4d`
   → `Box2D` (`getX()`/`getWidth()`/…; laid out `x, y, width, height`, not four corners),
   `Vector3d` → `Vec3d`, `AABB` → `Box3D`, and the opaque `ItemStack` is now a readable wrapper.
@@ -34,11 +34,13 @@ All notable changes to the Opal Scripting VS Code extension are documented in th
   was previously modelled as an opaque construct-and-pass-through type on the stated grounds that
   "Fabric intermediary mappings rename its methods at runtime" — a diagnosis wrong twice over
   (the client is on Mojang mappings; the real cause was the sandbox's default-deny policy).
-- `RenderScreenEvent`, `RenderWorldEvent` and `RenderBloomEvent` are now memberless. Their
-  `drawContext()`, `canvas()`, `mouseX()`, `mouseY()`, `matrixStack()` and `tickDelta()` members
-  were all promised but unreachable: the handler is passed the raw event record, which carries no
-  `@HostAccess.Export`, so every call on it throws. Use `client.getTickDelta()` and the `renderer`
-  global. (`GuiGraphicsExtractor`, `RenderCanvas` and `PoseStack` are gone with them.)
+- Render handlers now receive a readable payload. `renderScreen` gets a `ScriptRenderScreenEvent`
+  (`getPartialTicks()`, `getMouseX()`, `getMouseY()`); `renderWorld` and `renderBloom` get a
+  `ScriptRenderEvent` (`getPartialTicks()`). These were briefly typed as memberless brands, because
+  the raw event record carried no `@HostAccess.Export`; the client now wraps them, so the partial
+  tick and the screen pass's cursor position read straight off the event. The raw
+  `GuiGraphicsExtractor`/`RenderCanvas`/`PoseStack` stay unexposed; draw through the `renderer`
+  global.
 - Dropped the `movement.getMoveYaw(from, to)` overload and the `Vector2d` type it took. The
   overload exists on the host proxy but is uncallable from a script: its parameters are JOML
   `Vector2d`s and no global binds that class, so an argument for it cannot be built.
@@ -94,6 +96,18 @@ All notable changes to the Opal Scripting VS Code extension are documented in th
   example, a commented event handler).
 - Snippets for a full script scaffold, a bare `registerModule` block, an event handler, each of the
   four setting types, a palette view registration, and an overlay island registration.
+- `client.criteria(pattern)` and the `ScriptCriteria` matcher for ChatTriggers-style chat-line
+  matching: `match()` returns a read-only object of named captures (or `null`), with `test()` and
+  `getPattern()` alongside. The matcher is bounded so an untrusted chat line cannot stall the client.
+- `inventory.findItemById(id)` and `inventory.countItemById(id)`, id-keyed counterparts to
+  `findItem`/`countItem` that key on the stable registry id (`"minecraft:diamond"`) instead of the
+  locale-dependent display name.
+- `toString()` on the `Script*` value wrappers (`Vec2f`, `BlockPos`, `Direction`,
+  `RaytracedRotation`, `Effect`, `Entity`, `ItemStack`, `ScriptCriteria`), reflecting that a proxy
+  now prints a readable form under `console.log` / `String()`.
+- Snippets for the wave-1 surface: `opal-criteria` (a chat matcher), `opal-manifest` (the
+  `// ==OpalScript==` header block), `opal-render` (a `renderScreen` handler using
+  `getPartialTicks()`), and `opal-list` (`for..of` over a `ScriptList`).
 
 ### Fixed
 
