@@ -38,8 +38,8 @@
  * So three rules hold everywhere here, and a type that breaks one is a bug:
  *   • Getters, never properties. `box.getX()`, not `box.x`. `mc.getPlayer()`,
  *     not `mc.player`.
- *   • Containers are `ScriptList<T>` — `size()`/`isEmpty()`/`get(i)` only.
- *     Never an array, never iterable.
+ *   • Containers are `ScriptList<T>` — a read-only array (`length`, `[i]`,
+ *     `for..of`, spread) that also keeps `size()`/`isEmpty()`/`get(i)`.
  *   • A type modelled as an opaque brand (`HitResult`, `ClientLevel`) has no
  *     readable members at all, deliberately. Do not add speculative ones.
  *
@@ -357,24 +357,29 @@ interface ClientLevel {
 /**
  * A container as seen from script code — the `ScriptList` wrapper.
  *
- * **Not an array, and not iterable.** `HostAccess.EXPLICIT` grants no
- * container access, so a raw `java.util.List` handed to a script is completely
- * inert; this wrapper exports exactly the three members below. `list.length`,
- * `list[0]`, `for..of`, `.map`, and the spread operator do not work on one.
- * Walk it with an index:
+ * **A read-only array.** It reports a `length`, answers index access
+ * (`list[0]`), iterates under `for..of`, and works with spread (`[...list]`)
+ * and `Array.from(list)`. The `size()`/`isEmpty()`/`get(i)` methods stay for
+ * back-compat and read the same, with `get(i)` bounds-safe where a raw `[i]`
+ * past the end is `undefined`. Two limits: it is read-only, so `list[0] = x`
+ * and `push` are refused; and the `Array.prototype` helpers (`map`, `filter`,
+ * `reduce`) are not on it — spread into a real array first, `[...list].map(...)`.
  *
  * ```js
  * const entities = world.getLivingEntitiesInRange(16);
- * for (let i = 0; i < entities.size(); i++) {
- *     const entity = entities.get(i);
+ * for (const entity of entities) {
+ *     // ...
  * }
  * ```
  */
 interface ScriptList<T> {
-    size(): number;
-    isEmpty(): boolean;
+    readonly length: number;
+    readonly [index: number]: T;
     /** Bounds-safe: an out-of-range index returns `null` rather than throwing. */
     get(index: number): T | null;
+    size(): number;
+    isEmpty(): boolean;
+    [Symbol.iterator](): IterableIterator<T>;
 }
 
 /**
@@ -955,11 +960,11 @@ interface ModulesProxy {
     /** Sets whether a module should be visible in the arraylist/HUD. */
     setVisible(id: string, visible: boolean): void;
 
-    /** Display names of all registered modules, both native and script-defined. A `ScriptList`, not an array — walk it with `size()`/`get(i)`. */
+    /** Display names of all registered modules, both native and script-defined, as a `ScriptList<string>`. */
     listAll(): ScriptList<string>;
-    /** Display names of all modules in the given category. A `ScriptList`, not an array. */
+    /** Display names of all modules in the given category, as a `ScriptList<string>`. */
     listCategory(category: ModuleCategory): ScriptList<string>;
-    /** Display names of all currently enabled modules. A `ScriptList`, not an array — `listEnabled().size()`, never `.length`. */
+    /** Display names of all currently enabled modules, as a `ScriptList<string>`. */
     listEnabled(): ScriptList<string>;
 }
 declare const modules: ModulesProxy;
@@ -1089,7 +1094,7 @@ interface PlayerProxy {
     hasEffect(name: string): boolean;
     /** The named active effect, or `null` if the player does not have it. */
     getEffect(name: string): Effect | null;
-    /** Every effect currently active on the player. A `ScriptList`, not an array. */
+    /** Every effect currently active on the player, as a `ScriptList<Effect>`. */
     getEffects(): ScriptList<Effect>;
 
     /** Whether the next attack would land a critical hit (falling, not on ground, not in water, etc.). */

@@ -13,13 +13,13 @@ All notable changes to the Opal Scripting VS Code extension are documented in th
   form always read `undefined`, silently defeating every `mc.player === null` guard written
   against it. `getPlayer()` now returns a readable `Entity`; `getWorld()` returns an opaque,
   memberless `ClientLevel` token good only for a null check. The `LocalPlayer` type is gone.
-- **BREAKING: collections are `ScriptList<T>`, not arrays.** `ScriptList` is
-  `{ size(); isEmpty(); get(i) }` and is **not** iterable — the old `JavaList<T> extends
-  Iterable<T>` with `.length` and index access described an API that never existed
-  (`HostAccess.EXPLICIT` grants no container access). Affects `modules.listAll`/`listCategory`/
-  `listEnabled` (previously typed `string[]`, outright wrong), `player.getEffects`,
-  `world.getEntities`/`getLivingEntitiesInRange`/`getAdjacentDirections`, `renderer.wrapText`,
-  and `movement.yawPos` (previously typed as a `[number, number]` tuple).
+- **BREAKING: collections are `ScriptList<T>`.** It keeps `size()`/`isEmpty()`/`get(i)` and now
+  also reads as a **read-only array** — `length`, `[i]`, `for..of`, spread, and `Array.from` work,
+  backed by a host-controlled `ProxyArray` (not the old fictional `JavaList<T> extends Iterable<T>`
+  with an unchecked `.length`); writes and `Array.prototype` helpers like `.map` are not on it.
+  Affects `modules.listAll`/`listCategory`/`listEnabled` (previously typed `string[]`, outright
+  wrong), `player.getEffects`, `world.getEntities`/`getLivingEntitiesInRange`/`getAdjacentDirections`,
+  `renderer.wrapText`, and `movement.yawPos` (previously typed as a `[number, number]` tuple).
 - **BREAKING: geometry and item types are wrappers with getters, not property bags.** `Vector4d`
   → `Box2D` (`getX()`/`getWidth()`/…; laid out `x, y, width, height`, not four corners),
   `Vector3d` → `Vec3d`, `AABB` → `Box3D`, and the opaque `ItemStack` is now a readable wrapper.
