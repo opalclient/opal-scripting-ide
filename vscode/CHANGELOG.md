@@ -6,6 +6,46 @@ All notable changes to the Opal Scripting VS Code extension are documented in th
 
 ### Changed
 
+- **BREAKING: `entity.getName()` returns a `string`.** It used to return a Minecraft `Component`;
+  the `TextComponent` type is gone along with the `entity.getName().getString()` idiom.
+- **BREAKING: there is no `mc.player` / `mc.world`.** Only `mc.getPlayer()` / `mc.getWorld()`
+  resolve — GraalVM JS does no bean-property mapping under `HostAccess.EXPLICIT`, so the property
+  form always read `undefined`, silently defeating every `mc.player === null` guard written
+  against it. `getPlayer()` now returns a readable `Entity`; `getWorld()` returns an opaque,
+  memberless `ClientLevel` token good only for a null check. The `LocalPlayer` type is gone.
+- **BREAKING: collections are `ScriptList<T>`, not arrays.** `ScriptList` is
+  `{ size(); isEmpty(); get(i) }` and is **not** iterable — the old `JavaList<T> extends
+  Iterable<T>` with `.length` and index access described an API that never existed
+  (`HostAccess.EXPLICIT` grants no container access). Affects `modules.listAll`/`listCategory`/
+  `listEnabled` (previously typed `string[]`, outright wrong), `player.getEffects`,
+  `world.getEntities`/`getLivingEntitiesInRange`/`getAdjacentDirections`, `renderer.wrapText`,
+  and `movement.yawPos` (previously typed as a `[number, number]` tuple).
+- **BREAKING: geometry and item types are wrappers with getters, not property bags.** `Vector4d`
+  → `Box2D` (`getX()`/`getWidth()`/…; laid out `x, y, width, height`, not four corners),
+  `Vector3d` → `Vec3d`, `AABB` → `Box3D`, and the opaque `ItemStack` is now a readable wrapper.
+  `GpuImageHandle` → `ScriptImage` (with `getWidth`/`getHeight`, and no `NONE` sentinel — a
+  failed `loadImage` returns a handle whose `isValid()` is `false`).
+- **BREAKING: removed types for APIs that no longer exist** — `client.getModule()` and its
+  `ModuleHandle`/`OpalNativeModule` type, `world.getBlockState()`/`getBlock()` and their
+  `BlockState`/`Block` types, and the `Vec3i` global. All were unreadable at runtime, so nothing
+  could depend on them.
+- `Vec3d` is now the `ScriptVec3` wrapper: `new Vec3d(x, y, z)` works, and
+  `getX()`/`getY()`/`getZ()`/`length()`/`distanceTo()`/`add()`/`subtract()` are all callable. It
+  was previously modelled as an opaque construct-and-pass-through type on the stated grounds that
+  "Fabric intermediary mappings rename its methods at runtime" — a diagnosis wrong twice over
+  (the client is on Mojang mappings; the real cause was the sandbox's default-deny policy).
+- `RenderScreenEvent`, `RenderWorldEvent` and `RenderBloomEvent` are now memberless. Their
+  `drawContext()`, `canvas()`, `mouseX()`, `mouseY()`, `matrixStack()` and `tickDelta()` members
+  were all promised but unreachable: the handler is passed the raw event record, which carries no
+  `@HostAccess.Export`, so every call on it throws. Use `client.getTickDelta()` and the `renderer`
+  global. (`GuiGraphicsExtractor`, `RenderCanvas` and `PoseStack` are gone with them.)
+- Dropped the `movement.getMoveYaw(from, to)` overload and the `Vector2d` type it took. The
+  overload exists on the host proxy but is uncallable from a script: its parameters are JOML
+  `Vector2d`s and no global binds that class, so an argument for it cannot be built.
+- `MathHelper` is documented as unusable rather than merely awkward — it is bound as the raw
+  Mojang `Mth` class, so every call on it is denied.
+- The "New Opal Script" scaffold no longer seeds `if (mc.player === null || mc.world === null)`
+  into every generated script, which is where much of the broken pattern came from.
 - Finished event payload coverage and unified the cancel API. `PreMoveEvent`, `PostMoveEvent`,
   `ServerConnectEvent`, `BlockUpdateEvent`, `KeyPressEvent`/`MousePressEvent`, and `SwingEvent` now
   describe the actual `@HostAccess.Export` surface the sandbox exposes, not the raw (unwrapped)
@@ -24,12 +64,23 @@ All notable changes to the Opal Scripting VS Code extension are documented in th
 
 ### Added
 
+- `module.setBind(code)` / `getBind()` / `clearBind()`, letting a module claim a default key at
+  registration — `module.setBind(keys.F7)`.
+- `keys.F1`–`keys.F12`, `keys.MOUSE_0`–`keys.MOUSE_4`, and `keys.NONE` (the unbound sentinel).
+- `player.getArmor()`, `player.hasEffect(name)`, `player.getEffect(name)`, `player.getEffects()`,
+  and the `Effect` wrapper behind them. The amplifier convention is documented on the type:
+  `getAmplifier()` is 0-based, `getLevel()` is 1-based — Strength II is amplifier 1, level 2.
+- A readable `Entity` wrapper: `isPlayer()`, `isLiving()`, `getHealth()`, `getMaxHealth()`,
+  `getArmor()`, `getAbsorption()`, `hasEffect()`, `getEffects()`, position and rotation. The
+  living-only reads answer the `-1` sentinel on a non-living entity, documented per member.
+- `AttackEvent.getTarget()`, returning that `Entity` rather than only the flattened
+  `getTargetName()`/`getTargetHealth()`/… accessors.
 - Ambient type definitions (`typings/opal-globals.d.ts`) covering every documented scripting
   global: `client`, `player`, `movement`, `rotation`, `world`, `inventory`, `renderer`, `overlay`,
   `esp`, `modules`, `notification`, `palette`, `mc` (+ `interactionManager`), `keys`,
-  `registerScript`/`registerModule`, every event payload from `events.mdx`, and the bound Java
-  interop types (`Vec3d`, `Vec3i`, `Vec2f`, `BlockPos`, `Direction`, `RaytracedRotation`,
-  `MathHelper`, `Color`, `MAIN_HAND`/`OFF_HAND`).
+  `registerScript`/`registerModule`, every event payload from `events.mdx`, and the bound
+  interop types (`Vec3d`, `Vec2f`, `BlockPos`, `Direction`, `RaytracedRotation`, `MathHelper`,
+  `Color`, `MAIN_HAND`/`OFF_HAND`).
 - Read/write packet + event access matching the client's new packet scripting API:
   `PreMovementPacketEvent` (position/rotation/flags getters+setters), the shared `PacketEvent`
   (`getType()`) for `sendPacket`/`receivePacket`/`instantaneousSendPacket`/`instantaneousReceivePacket`,

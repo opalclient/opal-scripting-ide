@@ -26,23 +26,66 @@
  * a small JDK allow-list, are reachable from script code — see `intro.mdx`.
  * This file only describes the *shape* of that exposed API, not the sandbox
  * boundary itself.
+ *
+ * WHAT THAT POLICY MEANS FOR THE TYPES BELOW
+ * -------------------------------------------
+ * Default-deny is not a footnote — it is the reason this file looks the way it
+ * does. `HostAccess.EXPLICIT` grants no member access on un-annotated types,
+ * no bean-property mapping, and no container access. Anything that is not a
+ * primitive, a `String`, or an annotated wrapper is invisible to a script, and
+ * invisible *silently*: a property read on one is `undefined`, never an error.
+ *
+ * So three rules hold everywhere here, and a type that breaks one is a bug:
+ *   • Getters, never properties. `box.getX()`, not `box.x`. `mc.getPlayer()`,
+ *     not `mc.player`.
+ *   • Containers are `ScriptList<T>` — `size()`/`isEmpty()`/`get(i)` only.
+ *     Never an array, never iterable.
+ *   • A type modelled as an opaque brand (`HitResult`, `ClientLevel`) has no
+ *     readable members at all, deliberately. Do not add speculative ones.
+ *
+ * A wrong signature here is worse than a missing one: it is what a script
+ * author writes their code against. This file previously promised `mc.player`,
+ * an iterable `JavaList` with `.length`, and raw `Vector4d`/`ItemStack`/
+ * `BlockState` types — none of which existed at runtime, and the gallery
+ * scripts written against them silently did nothing in-game.
  */
 
 /* ============================================================================
- * Bound Java interop types (see Java Interop table in intro.mdx / world/types.mdx)
+ * Script wrapper types
+ *
+ * Everything the API hands a script is one of these: a primitive, a String, a
+ * `Script*` wrapper exposing getters, or an explicitly opaque token. Nothing
+ * else is reachable. Under `HostAccess.EXPLICIT` a raw Java or Minecraft
+ * object exports no members at all — a property read on one is silently
+ * `undefined` and a method call throws `Unknown identifier` — so every inert
+ * return type is wrapped in host code before it crosses into script land.
+ *
+ * Two conventions run through the whole surface:
+ *   • `-1` / `-1.0` is the sentinel for "absent or not applicable" (e.g. a
+ *     living-only read against a non-living entity). Not `null`, not `0`.
+ *   • Amplifier is 0-based (raw Minecraft), level is 1-based (what a nameplate
+ *     shows): Strength II is amplifier 1, level 2.
  * ========================================================================== */
 
 /**
- * `net.minecraft.world.phys.Vec3`, bound as `Vec3d`. A raw Minecraft type —
- * its instance methods are Fabric-intermediary-named at runtime and are
- * **not** callable by readable name from a script. Construct it and pass it
- * into proxy methods (e.g. `esp.projectVec`, `rotation.getRotationFromPosition`);
- * read coordinates back through the proxy that produced it, or via
- * `player.getBlockPosition()` for a readable wrapper.
+ * A world-space double vector — the `ScriptVec3` wrapper. Returned by
+ * `player.getPosition()`/`getEyePosition()`/`getVelocity()`/`getClosestPoint()`,
+ * `rotation.getRotationVector()`, and the `esp` projection methods.
+ *
+ * Bound as `Vec3d`, so `new Vec3d(x, y, z)` constructs one. (The global used
+ * to be the raw Mojang `Vec3` class, which was neither constructible nor
+ * readable from a script.)
  */
 interface Vec3d {
-    /** Opaque — do not call instance methods directly; see class doc comment. */
-    readonly __opalVec3dBrand?: never;
+    getX(): number;
+    getY(): number;
+    getZ(): number;
+    /** Length of this vector from the origin. */
+    length(): number;
+    distanceTo(other: Vec3d): number;
+    add(other: Vec3d): Vec3d;
+    subtract(other: Vec3d): Vec3d;
+    toString(): string;
 }
 declare const Vec3d: {
     /** Constructs a new world-space double vector. */
@@ -50,21 +93,8 @@ declare const Vec3d: {
 };
 
 /**
- * `net.minecraft.core.Vec3i`, bound as `Vec3i`. Same intermediary-name
- * caveat as `Vec3d` — treat as construct-and-pass-through only. Prefer
- * `BlockPos` for block positions (it exposes readable `getX/getY/getZ`).
- */
-interface Vec3i {
-    readonly __opalVec3iBrand?: never;
-}
-declare const Vec3i: {
-    new (x: number, y: number, z: number): Vec3i;
-};
-
-/**
  * A yaw/pitch rotation pair. Bound as `Vec2f`, backed by the `ScriptVec2f`
- * wrapper around `net.minecraft.world.phys.Vec2`. Unlike `Vec3d`, this
- * wrapper's methods ARE readable-name-callable.
+ * wrapper around `net.minecraft.world.phys.Vec2`.
  */
 interface Vec2f {
     /** Yaw angle (horizontal rotation) in degrees. */
@@ -123,16 +153,22 @@ interface RaytracedRotation {
     getHitResult(): HitResult;
 }
 
-/** `net.minecraft.util.Mth`, bound as `MathHelper`. Its static methods are
- * intermediary-named at runtime and are NOT callable by readable name. For
- * interpolation use `esp.lerp(start, end, tickDelta)`; for general math
- * prefer JavaScript's built-in `Math`. Kept opaque intentionally. */
+/**
+ * `net.minecraft.util.Mth`, bound as `MathHelper`.
+ *
+ * **Unusable — do not reach for it.** It is bound as the raw Mojang class,
+ * which carries no `@HostAccess.Export`, so every call on it is denied at
+ * runtime. Typed as `unknown` so the IDE refuses to autocomplete a method that
+ * cannot work. For interpolation use `esp.lerp(start, end, tickDelta)`; for
+ * general math use JavaScript's built-in `Math`.
+ */
 declare const MathHelper: unknown;
 
 /**
- * The standard `java.awt.Color`, bound as `Color`. Unlike the Minecraft
- * wrapper types above, its methods are NOT intermediary-mapped, so they are
- * callable directly. An alternative to `renderer.color(r, g, b, a)` for
+ * The standard `java.awt.Color`, bound as `Color`. The one JDK type scripts
+ * can touch directly: its two constructors and `getRGB()` are explicitly
+ * allow-listed by the host-access policy, which is why they work where
+ * `MathHelper`'s do not. An alternative to `renderer.color(r, g, b, a)` for
  * building packed ARGB integers.
  */
 interface JavaColor {
@@ -152,100 +188,193 @@ declare const MAIN_HAND: InteractionHand;
 /** The player's off hand. */
 declare const OFF_HAND: InteractionHand;
 
-/** A generic 2D double vector, e.g. the `from`/`to` params of `movement.getMoveYaw(from, to)`. */
-interface Vector2d {
-    x: number;
-    y: number;
+/**
+ * A screen-space rectangle — the `ScriptBox2D` wrapper. Returned by
+ * `esp.getEntityBox2D()`.
+ *
+ * The components are laid out `(x, y, width, height)`, **not** four corners.
+ * Both spellings of the same rectangle are exported: the raw component names
+ * (`getZ()` is the width, `getW()` the height) and the readable ones.
+ */
+interface Box2D {
+    /** Left edge (screen X). */
+    getX(): number;
+    /** Top edge (screen Y). */
+    getY(): number;
+    /** The width, under its raw component name. Same as `getWidth()`. */
+    getZ(): number;
+    /** The height, under its raw component name. Same as `getHeight()`. */
+    getW(): number;
+    /** Left edge — the readable spelling of `getX()`. */
+    getX1(): number;
+    /** Top edge — the readable spelling of `getY()`. */
+    getY1(): number;
+    /** Right edge (`x + width`). */
+    getX2(): number;
+    /** Bottom edge (`y + height`). */
+    getY2(): number;
+    getWidth(): number;
+    getHeight(): number;
+    toString(): string;
 }
 
-/** Screen-space projection result from `esp.project` / `esp.projectVec`. */
-interface Vector3d {
-    /** Screen X coordinate. */
-    x: number;
-    /** Screen Y coordinate. */
-    y: number;
-    /** Depth — a value `>= 1.0` means the point is behind the camera. */
-    z: number;
+/**
+ * A world-space axis-aligned bounding box — the `ScriptBox3D` wrapper.
+ * Returned by `player.getBoundingBox()`.
+ */
+interface Box3D {
+    getMinX(): number;
+    getMinY(): number;
+    getMinZ(): number;
+    getMaxX(): number;
+    getMaxY(): number;
+    getMaxZ(): number;
+    getWidth(): number;
+    getHeight(): number;
+    getDepth(): number;
+    toString(): string;
 }
 
-/** Screen-space rectangle from `esp.getEntityBox2D` (packed x/y/width/height). */
-interface Vector4d {
-    /** Left edge of the 2D box (screen X). */
-    x: number;
-    /** Top edge of the 2D box (screen Y). */
-    y: number;
-    /** Width of the 2D box. */
-    z: number;
-    /** Height of the 2D box. */
-    w: number;
+/**
+ * One active status effect — the `ScriptEffect` wrapper. Obtain from
+ * `player.getEffects()`/`getEffect(name)` or the entity equivalents.
+ */
+interface Effect {
+    /** Namespaced registry id, e.g. `"minecraft:strength"`. */
+    getId(): string;
+    /** Localised display name, e.g. `"Strength"`. */
+    getName(): string;
+    /** **0-based** amplifier, as Minecraft stores it: Strength II is `1`. */
+    getAmplifier(): number;
+    /** **1-based** level, as a nameplate shows it: Strength II is `2`. */
+    getLevel(): number;
+    /** Remaining duration in ticks (20 per second). */
+    getDuration(): number;
+    /** Remaining duration in whole seconds. */
+    getDurationSeconds(): number;
+    /** Whether this effect has no expiry (a beacon/command effect). */
+    isInfinite(): boolean;
+    /** Whether this effect came from a beacon or conduit rather than a potion. */
+    isAmbient(): boolean;
+    /** Packed ARGB color of the effect's particles. */
+    getColor(): ARGBColor;
 }
 
-/** Raw hit-result object. Opaque — obtain from `RaytracedRotation.getHitResult()`
- * and pass straight to `mc.interactionManager.interactBlock()`. */
+/**
+ * An entity — the `ScriptEntity` wrapper. What `world.getEntities()`,
+ * `world.getLivingEntitiesInRange()`, `mc.getPlayer()` and
+ * `AttackEvent.getTarget()` hand a script.
+ *
+ * `getName()` returns a plain `string`. It used to return a Minecraft
+ * `Component`, which forced an `entity.getName().getString()` idiom — that is
+ * gone, and `.getString()` on the result will now fail.
+ *
+ * The living-only reads (`getHealth`, `getMaxHealth`, `getAbsorption`,
+ * `getArmor`) answer `-1` on a non-living entity — gate on `>= 0`, since `0`
+ * is a legitimate value for several of them.
+ */
+interface Entity {
+    /** Localised display name, as plain text. */
+    getName(): string;
+    /** Numeric entity id for this session. */
+    getId(): number;
+    /** Stable UUID string. */
+    getUuid(): string;
+    isAlive(): boolean;
+    /** Whether this entity is living (a mob or a player) and so has health. */
+    isLiving(): boolean;
+    isPlayer(): boolean;
+    getX(): number;
+    getY(): number;
+    getZ(): number;
+    getYaw(): number;
+    getPitch(): number;
+    /** Current health, or `-1` if not a living entity. */
+    getHealth(): number;
+    /** Maximum health, or `-1` if not a living entity. */
+    getMaxHealth(): number;
+    /** Absorption (golden hearts), or `-1` if not a living entity. */
+    getAbsorption(): number;
+    /** Armor points (0-20), or `-1` if not a living entity. */
+    getArmor(): number;
+    /** Distance from the local player, in blocks. */
+    getDistance(): number;
+    /** Whether this entity has the named effect (matched on display name, case-insensitively). */
+    hasEffect(name: string): boolean;
+    /** The named effect, or `null` if absent or this is not a living entity. */
+    getEffect(name: string): Effect | null;
+    /** Every active effect on this entity. Empty for a non-living entity. */
+    getEffects(): ScriptList<Effect>;
+}
+/** A living entity (mob or player). Same wrapper — `isLiving()` reports which. */
+type LivingEntity = Entity;
+
+/**
+ * An item stack — the `ScriptItemStack` wrapper. Returned by
+ * `inventory.getStack()` / `getMainHandStack()` / `getOffHandStack()`.
+ */
+interface ItemStack {
+    isEmpty(): boolean;
+    getCount(): number;
+    /** Localised display name, as plain text. */
+    getName(): string;
+    /** Namespaced registry id, e.g. `"minecraft:diamond_pickaxe"`. */
+    getId(): string;
+    /** Whether this item takes durability damage at all. */
+    isDamageable(): boolean;
+    /** Durability used so far. `0` when not damageable. */
+    getDamage(): number;
+    /** Total durability. `0` when not damageable. */
+    getMaxDamage(): number;
+    /** Whether this stack is a placeable block. */
+    isBlock(): boolean;
+}
+
+/**
+ * An opaque pass-back token from `RaytracedRotation.getHitResult()`.
+ *
+ * **Deliberately memberless.** A script cannot read anything off it, and does
+ * not need to: its only legitimate use is being handed straight to
+ * `mc.interactionManager.interactBlock()`. That is a valid use of an inert
+ * type, not an oversight — do not expect properties on it.
+ */
 interface HitResult {
     readonly __opalHitResultBrand?: never;
 }
 
-/** A Minecraft text component. `.getString()` yields the plain-text form. */
-interface TextComponent {
-    getString(): string;
-}
-
-/** Raw Minecraft entity (from `world.getEntities()` or
- * `world.getLivingEntitiesInRange()`). Opaque aside from the documented
- * member below — `attack`'s target is exposed via `AttackEvent`'s own
- * primitive getters (`getTargetName()`, `getTargetId()`, ...) rather than a
- * raw `Entity`. */
-interface Entity {
-    getName(): TextComponent;
-}
-/** A living entity (mob or player). */
-interface LivingEntity extends Entity {}
-
-/** Opaque item stack, from `inventory.getStack()` / `getMainHandStack()` / `getOffHandStack()`. */
-interface ItemStack {
-    readonly __opalItemStackBrand?: never;
-}
-/** Opaque block state, from `world.getBlockState()` / block-update event getters. */
-interface BlockState {
-    readonly __opalBlockStateBrand?: never;
-}
-/** Opaque block type, from `world.getBlock()`. */
-interface Block {
-    readonly __opalBlockBrand?: never;
-}
-/** Axis-aligned bounding box, from `player.getBoundingBox()`. Also referred to as `Box` in some docs. */
-interface AABB {
-    readonly __opalAabbBrand?: never;
-}
-/** Alias — `interaction.mdx` calls this type `Box`, `player.mdx` calls it `AABB`. Same object. */
-type Box = AABB;
-/** Opaque frame draw context, from render-event `drawContext()`. */
-interface GuiGraphicsExtractor {
-    readonly __opalGuiGraphicsExtractorBrand?: never;
-}
-/** Opaque render canvas / bloom target, from render-event `canvas()`. */
-interface RenderCanvas {
-    readonly __opalRenderCanvasBrand?: never;
-}
-/** Opaque camera-relative transform stack, from `renderWorld`'s `matrixStack()`. */
-interface PoseStack {
-    readonly __opalPoseStackBrand?: never;
+/**
+ * An opaque token from `mc.getWorld()`.
+ *
+ * **Deliberately memberless.** Comparing against `null` needs no member
+ * access, so `mc.getWorld() === null` correctly answers "is the world loaded"
+ * — which is the only thing this value is for. Every actual world query is
+ * flattened onto the `world` global; use that.
+ */
+interface ClientLevel {
+    readonly __opalClientLevelBrand?: never;
 }
 
 /**
- * A `java.util.List` as seen from script code. Supports the accessor style
- * used throughout the docs (`list.get(i)`, `list.isEmpty()`, `list.size()`)
- * as well as `for (const x of list)` iteration. Some lists (e.g. the return
- * of `renderer.wrapText`) are documented as also behaving like a plain JS
- * array (`.length`, `list[i]`); this interface allows both styles.
+ * A container as seen from script code — the `ScriptList` wrapper.
+ *
+ * **Not an array, and not iterable.** `HostAccess.EXPLICIT` grants no
+ * container access, so a raw `java.util.List` handed to a script is completely
+ * inert; this wrapper exports exactly the three members below. `list.length`,
+ * `list[0]`, `for..of`, `.map`, and the spread operator do not work on one.
+ * Walk it with an index:
+ *
+ * ```js
+ * const entities = world.getLivingEntitiesInRange(16);
+ * for (let i = 0; i < entities.size(); i++) {
+ *     const entity = entities.get(i);
+ * }
+ * ```
  */
-interface JavaList<T> extends Iterable<T> {
-    readonly length: number;
-    readonly [index: number]: T;
-    get(index: number): T;
+interface ScriptList<T> {
     size(): number;
     isEmpty(): boolean;
+    /** Bounds-safe: an out-of-range index returns `null` rather than throwing. */
+    get(index: number): T | null;
 }
 
 /**
@@ -257,15 +386,22 @@ interface JavaList<T> extends Iterable<T> {
  */
 type ARGBColor = number;
 
-/** GPU-resident image handle from `renderer.loadImage()`. */
-interface GpuImageHandle {
+/**
+ * A loaded image — the `ScriptImage` wrapper, from `renderer.loadImage()`.
+ * Pass it to `renderer.image()` / `imageTinted()` / `destroyImage()`.
+ *
+ * `loadImage` always returns a handle, never `null`: check `isValid()` before
+ * drawing, since a failed load yields an invalid handle rather than an error.
+ */
+interface ScriptImage {
     /** Whether this handle refers to a successfully loaded image. */
     isValid(): boolean;
+    /** Pixel width, or `0` when invalid. */
+    getWidth(): number;
+    /** Pixel height, or `0` when invalid. */
+    getHeight(): number;
+    toString(): string;
 }
-declare const GpuImageHandle: {
-    /** Sentinel returned by `loadImage` on failure — always `isValid() === false`. */
-    readonly NONE: GpuImageHandle;
-};
 
 /** Registered font names accepted by every `renderer` text method. Bare
  * string literals from other font packs are still accepted at runtime. */
@@ -277,8 +413,9 @@ type FontName = "productsans-bold" | "productsans-medium" | "materialicons-regul
 
 /**
  * GLFW key codes as plain integer fields, since scripts cannot reference
- * `org.lwjgl.*` classes directly. Values match the codes the command
- * palette delivers to `keyPressed(keyCode, mods)`.
+ * `org.lwjgl.*` classes directly. Values match the codes the command palette
+ * delivers to `keyPressed(keyCode, mods)`, and are what `module.setBind()`
+ * expects.
  */
 interface KeysGlobal {
     UP: number;
@@ -298,6 +435,18 @@ interface KeysGlobal {
     V: number; W: number; X: number; Y: number; Z: number;
     NUM_0: number; NUM_1: number; NUM_2: number; NUM_3: number; NUM_4: number;
     NUM_5: number; NUM_6: number; NUM_7: number; NUM_8: number; NUM_9: number;
+    F1: number; F2: number; F3: number; F4: number; F5: number; F6: number;
+    F7: number; F8: number; F9: number; F10: number; F11: number; F12: number;
+    /** Left mouse button. */
+    MOUSE_0: number;
+    /** Right mouse button. */
+    MOUSE_1: number;
+    /** Middle mouse button. */
+    MOUSE_2: number;
+    MOUSE_3: number;
+    MOUSE_4: number;
+    /** The "no bind" sentinel — what `getBind()` returns when unbound. */
+    NONE: number;
 }
 declare const keys: KeysGlobal;
 
@@ -352,36 +501,41 @@ interface PreGameTickEvent {}
 interface PostGameTickEvent {}
 
 /** `renderScreen` — fired during the 2D HUD pass. A record; use bare accessors. */
+/**
+ * The `renderScreen` payload.
+ *
+ * **Nothing on it is readable.** The handler is passed the raw
+ * `RenderScreenEvent` record, which carries no `@HostAccess.Export`, so every
+ * member call on it throws `Unknown identifier` — `drawContext()`, `canvas()`,
+ * `mouseX()`, `mouseY()` and `tickDelta()` all included. Declare the handler
+ * with no parameter and read what you need from the globals instead:
+ * `client.getTickDelta()` for the partial tick, and the `renderer` global for
+ * drawing (it targets the frame's canvas for you).
+ */
 interface RenderScreenEvent {
-    /** The GUI graphics extractor for the current frame. */
-    drawContext(): GuiGraphicsExtractor;
-    /** The render canvas for the pass. */
-    canvas(): RenderCanvas;
-    /** Cursor X position in GUI-scaled coordinates. */
-    mouseX(): number;
-    /** Cursor Y position in GUI-scaled coordinates. */
-    mouseY(): number;
-    /** Fractional progress through the current tick (0.0–1.0), for smooth interpolation. */
-    tickDelta(): number;
+    readonly __opalRenderScreenEventBrand?: never;
 }
 
 /** `renderWorld` — fired during the 3D world pass. Use `esp.*` for projection here. */
+/**
+ * The `renderWorld` payload. **Nothing on it is readable** — same reason as
+ * `RenderScreenEvent`: the raw record carries no `@HostAccess.Export`, so
+ * `matrixStack()` and `tickDelta()` both throw. Use `client.getTickDelta()`.
+ */
 interface RenderWorldEvent {
-    /** Camera-relative transform stack (pre-multiplied by the camera view rotation). */
-    matrixStack(): PoseStack;
-    /** Partial tick (0.0–1.0). */
-    tickDelta(): number;
+    readonly __opalRenderWorldEventBrand?: never;
 }
 
 /** `renderBloom` — fired during the HUD bloom pass. Shapes drawn here feed
  * the glow/bloom effect rather than showing directly. */
+/**
+ * The `renderBloom` payload. **Nothing on it is readable** — same reason as
+ * `RenderScreenEvent`: the raw record carries no `@HostAccess.Export`, so
+ * `drawContext()`, `canvas()` and `tickDelta()` all throw. Use
+ * `client.getTickDelta()`.
+ */
 interface RenderBloomEvent {
-    /** The GUI graphics extractor for the current frame. */
-    drawContext(): GuiGraphicsExtractor;
-    /** The bloom render target for this pass. */
-    canvas(): RenderCanvas;
-    /** Partial tick (0.0–1.0). */
-    tickDelta(): number;
+    readonly __opalRenderBloomEventBrand?: never;
 }
 
 /** `preMove` / `postMove` payload. Cancellable only on `preMove`. */
@@ -458,6 +612,8 @@ interface InstantaneousReceivePacketEvent extends PacketEvent {}
 
 /** `attack` — the player attacks an entity, before the interaction is processed. Not cancellable. */
 interface AttackEvent {
+    /** The entity being attacked. The flattened getters below are shortcuts for its reads. */
+    getTarget(): Entity;
     /** Display name of the entity being attacked. */
     getTargetName(): string;
     /** Entity id of the target. */
@@ -640,6 +796,18 @@ interface ScriptModule {
     getMode(name: string): string;
     /** Whether a mode setting currently equals `option` (case-insensitive). There is no `setMode` — mode settings are read-only from script code. */
     isModeEqual(name: string, option: string): boolean;
+
+    /**
+     * Binds this module to a key, so it toggles without a trip through the
+     * binds menu. Pass a `keys.*` code — `module.setBind(keys.F7)`. A user's
+     * own rebind wins over this and survives a `.script reload`, so calling
+     * this at registration sets a *default*, not a lock.
+     */
+    setBind(code: number): void;
+    /** The module's current bind code, or `keys.NONE` when unbound. */
+    getBind(): number;
+    /** Removes the module's bind, leaving it toggleable only from the ClickGUI. */
+    clearBind(): void;
 }
 
 /** Handle returned by `registerScript()`, used to register one or more modules. */
@@ -662,10 +830,6 @@ declare function registerScript(metadata: ScriptMetadata): ScriptHandle;
  * client — core/client (reference/core.mdx "Client Proxy")
  * ========================================================================== */
 
-/** Opaque handle to a registered module, from `client.getModule(id)`. */
-interface ModuleHandle {
-    readonly __opalModuleHandleBrand?: never;
-}
 
 interface ClientProxy {
     /** Prints a message to the local chat only. Calls `toString()` on the object. */
@@ -675,8 +839,6 @@ interface ClientProxy {
     /** Prints an error-styled (red) message to the local chat. */
     error(message: string): void;
 
-    /** Retrieves a registered module by display name (case-insensitive). Throws if not found. */
-    getModule(id: string): ModuleHandle;
     /** Whether a specific module is currently enabled. */
     isModuleEnabled(id: string): boolean;
     /** Toggles a module on or off. */
@@ -793,29 +955,18 @@ interface ModulesProxy {
     /** Sets whether a module should be visible in the arraylist/HUD. */
     setVisible(id: string, visible: boolean): void;
 
-    /** Display names of all registered modules, both native and script-defined. */
-    listAll(): string[];
-    /** Display names of all modules in the given category. */
-    listCategory(category: ModuleCategory): string[];
-    /** Display names of all currently enabled modules. */
-    listEnabled(): string[];
+    /** Display names of all registered modules, both native and script-defined. A `ScriptList`, not an array — walk it with `size()`/`get(i)`. */
+    listAll(): ScriptList<string>;
+    /** Display names of all modules in the given category. A `ScriptList`, not an array. */
+    listCategory(category: ModuleCategory): ScriptList<string>;
+    /** Display names of all currently enabled modules. A `ScriptList`, not an array — `listEnabled().size()`, never `.length`. */
+    listEnabled(): ScriptList<string>;
 }
 declare const modules: ModulesProxy;
 
 /* ============================================================================
  * mc — MinecraftProxy (reference/mc.mdx, reference/core.mdx)
  * ========================================================================== */
-
-/** Local player entity as seen through `mc.player`. Null-check use only —
- * for real state/behaviour use the `player` proxy global instead. */
-interface LocalPlayer {
-    readonly __opalLocalPlayerBrand?: never;
-}
-/** Client world as seen through `mc.world`. Null-check use only — for real
- * block/entity queries use the `world` proxy global instead. */
-interface ClientLevel {
-    readonly __opalClientLevelBrand?: never;
-}
 
 /**
  * Handles block interactions, entity attacks, and block breaking. Every
@@ -840,24 +991,35 @@ interface InteractionManagerProxy {
 }
 
 /**
- * A safe, structured facade over the Minecraft client. `mc.player` and
- * `mc.world` exist for **null checks only** — for actual player/world
- * behaviour use the dedicated `player`/`world`/`inventory` proxy globals,
- * which return script-safe wrapper types instead of raw Fabric-intermediary
- * objects. `mc.player === null` is the idiomatic guard at the top of every
- * event callback.
+ * A safe, structured facade over the Minecraft client.
+ *
+ * **There is no `mc.player` or `mc.world`.** GraalVM JS does no bean-property
+ * mapping under `HostAccess.EXPLICIT`, so only the getter form resolves — the
+ * property form reads `undefined`, which makes `mc.player === null` a guard
+ * that never fires. The idiomatic guard at the top of an event callback is:
+ *
+ * ```js
+ * if (mc.getPlayer() === null || mc.getWorld() === null) return;
+ * ```
+ *
+ * For actual player/world behaviour use the dedicated `player` / `world` /
+ * `inventory` proxy globals.
  */
 interface MinecraftProxy {
-    /** Null-check field — local player entity, or `null` if not yet loaded. */
-    readonly player: LocalPlayer | null;
-    /** Null-check field — active client world, or `null` if not yet loaded. */
-    readonly world: ClientLevel | null;
     /** Block/entity interaction proxy. */
     readonly interactionManager: InteractionManagerProxy;
 
-    /** Method form of the `player` field. Intended for null-guard checks only. */
-    getPlayer(): LocalPlayer | null;
-    /** Method form of the `world` field. Intended for null-guard checks only. */
+    /**
+     * The local player as a `ScriptEntity`, or `null` if not yet loaded.
+     * Good for a null guard, and readable for name/health/position — but for
+     * local-player state and movement prefer the richer `player` global.
+     */
+    getPlayer(): Entity | null;
+    /**
+     * The active client world, or `null` if not yet loaded. **Null-guard use
+     * only** — the returned value is an opaque token with no readable members.
+     * Every real world query lives on the `world` global.
+     */
     getWorld(): ClientLevel | null;
     /** Method form of the `interactionManager` field. Prefer the field directly. */
     getInteractionManager(): InteractionManagerProxy;
@@ -870,9 +1032,10 @@ declare const mc: MinecraftProxy;
 
 /**
  * Local player state: position, rotation, health, combat utilities, and
- * basic actions. Every method here reads from `mc.player`, which is `null`
- * on the main menu, during world loads, and between disconnects — guard
- * every handler with `if (mc.player === null) return;` before use.
+ * basic actions. Every method here reads the local player, which does not
+ * exist on the main menu, during world loads, or between disconnects — guard
+ * every handler with `if (mc.getPlayer() === null) return;` before use.
+ * (`mc.player` is not a thing; see `MinecraftProxy`.)
  */
 interface PlayerProxy {
     /** Player's eye position in world space — the origin point for raycasts and rotation calculations. */
@@ -884,7 +1047,7 @@ interface PlayerProxy {
     /** Current per-tick velocity (delta movement) vector. */
     getVelocity(): Vec3d;
     /** Player's axis-aligned bounding box. */
-    getBoundingBox(): AABB;
+    getBoundingBox(): Box3D;
     /** Eye height above feet, in blocks. */
     getStandingEyeHeight(): number;
 
@@ -916,6 +1079,18 @@ interface PlayerProxy {
     getMaxHealth(): number;
     /** Absorption (golden hearts) amount. */
     getAbsorption(): number;
+    /** Armor points (0-20) from the currently worn armor. */
+    getArmor(): number;
+
+    /**
+     * Whether the player currently has the named effect. Matched on the
+     * effect's display name, case-insensitively — `hasEffect("strength")`.
+     */
+    hasEffect(name: string): boolean;
+    /** The named active effect, or `null` if the player does not have it. */
+    getEffect(name: string): Effect | null;
+    /** Every effect currently active on the player. A `ScriptList`, not an array. */
+    getEffects(): ScriptList<Effect>;
 
     /** Whether the next attack would land a critical hit (falling, not on ground, not in water, etc.). */
     canCrit(): boolean;
@@ -969,9 +1144,14 @@ interface MovementProxy {
     /** Applies the player's Swiftness potion-effect bonus to a base speed (optionally with a custom per-level multiplier). */
     getSwiftnessSpeed(speed: number, swiftnessMultiplier?: number): number;
 
-    /** Movement yaw between two 2D positions. */
-    getMoveYaw(from: Vector2d, to: Vector2d): number;
-    /** Current movement yaw based on WASD input and camera rotation. */
+    /**
+     * Current movement yaw based on WASD input and camera rotation.
+     *
+     * There is a two-argument `getMoveYaw(from, to)` overload on the host
+     * proxy, but it is **not callable from a script**: its parameters are JOML
+     * `Vector2d`s, and no global binds that class, so there is no way to build
+     * an argument for it. It is deliberately not typed here.
+     */
     getMoveYaw(): number;
     /** Current movement direction in degrees (or for a specific yaw, if given), accounting for strafe/forward input. */
     getDirectionDegrees(yaw?: number): number;
@@ -979,8 +1159,8 @@ interface MovementProxy {
     getDirectionRadians(yaw?: number): number;
     /** Calculates the exact movement direction from raw input values. Returns radians. */
     getDirection(rotationYaw: number, moveForward: number, moveStrafing: number): number;
-    /** X/Z offsets for a given yaw direction and distance: `[deltaX, deltaZ]`. */
-    yawPos(yaw: number, value: number): [number, number];
+    /** X/Z offsets for a given yaw direction and distance. A two-element `ScriptList`, not a tuple: `get(0)` is the X delta, `get(1)` the Z delta. */
+    yawPos(yaw: number, value: number): ScriptList<number>;
 }
 declare const movement: MovementProxy;
 
@@ -1008,7 +1188,7 @@ interface RotationProxy {
      * Raytraced rotation to a living entity, validating a hit within range
      * (the method KillAura uses). Returns `null` if no valid rotation exists.
      */
-    getRotationFromRaycastedEntity(entity: LivingEntity, closestVector: Vec3d, entityInteractionRange: number): RaytracedRotation | null;
+    getRotationFromRaycastedEntity(entity: Entity, closestVector: Vec3d, entityInteractionRange: number): RaytracedRotation | null;
     /** Unit look vector for the given pitch/yaw. */
     getRotationVector(pitch: number, yaw: number): Vec3d;
 
@@ -1045,8 +1225,9 @@ declare const rotation: RotationProxy;
 /**
  * Hotbar slot switching (with silent/spoof variants), item searching, and
  * stack inspection. Hotbar slots are `0`–`8`; the full inventory is `0`–`35`
- * (hotbar `0`–`8`, main inventory `9`–`35`). All methods read `mc.player`
- * without a null guard — confirm the player exists first.
+ * (hotbar `0`–`8`, main inventory `9`–`35`). All methods read the local player
+ * without a null guard — confirm it exists first with
+ * `if (mc.getPlayer() === null) return;`.
  */
 interface InventoryProxy {
     /** Switches the selected hotbar slot normally — visible to client and server. */
@@ -1068,11 +1249,11 @@ interface InventoryProxy {
     findItemInInventory(itemName: string): number;
 
     /** Item stack in the given hotbar slot. */
-    getStack(slot: number): ItemStack;
+    getStack(slot: number): ItemStack | null;
     /** Main-hand item stack, resolved through the slot system (accounts for silent switching). */
-    getMainHandStack(): ItemStack;
+    getMainHandStack(): ItemStack | null;
     /** Off-hand item stack. */
-    getOffHandStack(): ItemStack;
+    getOffHandStack(): ItemStack | null;
     /** Whether the main-hand item is a placeable block. */
     isHeldItemBlock(): boolean;
     /** Whether the item in the given slot is a placeable block. */
@@ -1101,22 +1282,18 @@ interface WorldProxy {
     isSolid(pos: BlockPos): boolean;
     /** Localized display name of the block. */
     getBlockName(pos: BlockPos): string;
-    /** Raw block state object. */
-    getBlockState(pos: BlockPos): BlockState;
-    /** Block type object. */
-    getBlock(pos: BlockPos): Block;
     /** Breaking hardness; `-1` means unbreakable (bedrock). */
     getBlockHardness(pos: BlockPos): number;
 
     /** Whether any face-adjacent block is solid (placeable-against). */
     hasAdjacentBlock(pos: BlockPos): boolean;
     /** Directions where a solid neighbour exists. Can be empty. */
-    getAdjacentDirections(pos: BlockPos): JavaList<Direction>;
+    getAdjacentDirections(pos: BlockPos): ScriptList<Direction>;
 
     /** All entities in the world. */
-    getEntities(): Iterable<Entity>;
+    getEntities(): ScriptList<Entity>;
     /** Living entities (mobs + players) within `radius` of the player, excluding self. */
-    getLivingEntitiesInRange(radius: number): JavaList<LivingEntity>;
+    getLivingEntitiesInRange(radius: number): ScriptList<Entity>;
 
     /** World time in ticks. */
     getTime(): number;
@@ -1140,11 +1317,11 @@ declare const world: WorldProxy;
  */
 interface EspProxy {
     /** Projects an entity's full 3D bounding box onto the screen, returning the enclosing 2D rectangle. `null` if behind camera or fully off-viewport. */
-    getEntityBox2D(entity: LivingEntity, tickDelta: number): Vector4d | null;
+    getEntityBox2D(entity: Entity, tickDelta: number): Box2D | null;
     /** Projects a single 3D world position onto the 2D screen. Check `result.z < 1.0` — `>= 1.0` means behind the camera. */
-    project(worldX: number, worldY: number, worldZ: number, tickDelta: number): Vector3d | null;
+    project(worldX: number, worldY: number, worldZ: number, tickDelta: number): Vec3d | null;
     /** Convenience wrapper around `project()` for a `Vec3d` position. */
-    projectVec(pos: Vec3d, tickDelta: number): Vector3d | null;
+    projectVec(pos: Vec3d, tickDelta: number): Vec3d | null;
 
     /** Smoothly interpolated, camera-relative entity position between the previous and current tick. `null` for non-`LivingEntity` targets. */
     getInterpolatedPosition(entity: Entity, tickDelta: number): Vec3d | null;
@@ -1154,7 +1331,7 @@ interface EspProxy {
     /** Whether a world position projects to a visible on-screen location (in front of the camera and inside the viewport). */
     isOnScreen(worldX: number, worldY: number, worldZ: number, tickDelta: number): boolean;
     /** Whether any part of an entity's bounding box projects to visible screen coordinates. Equivalent to `getEntityBox2D` returning non-null. */
-    isEntityOnScreen(entity: LivingEntity, tickDelta: number): boolean;
+    isEntityOnScreen(entity: Entity, tickDelta: number): boolean;
 }
 declare const esp: EspProxy;
 
@@ -1221,14 +1398,14 @@ interface RendererProxy {
      */
     innerGlow(x: number, y: number, width: number, height: number, radius: number, spread: number, color: ARGBColor): void;
 
-    /** Loads an image from the client's resource path, returning a cached GPU handle. Returns `GpuImageHandle.NONE` on failure — check `isValid()` before drawing. */
-    loadImage(path: string): GpuImageHandle;
+    /** Loads an image from the client's resource path, returning a cached handle. Never `null` — a failed load yields a handle whose `isValid()` is `false`, so check that before drawing. */
+    loadImage(path: string): ScriptImage;
     /** Draws a loaded image within the given bounds with optional corner rounding. Skipped silently outside an active render pass. */
-    image(handle: GpuImageHandle, x: number, y: number, width: number, height: number, radius: number): void;
+    image(handle: ScriptImage, x: number, y: number, width: number, height: number, radius: number): void;
     /** Draws a loaded image multiplied by a tint color — useful for recoloring icons or fading images. */
-    imageTinted(handle: GpuImageHandle, x: number, y: number, width: number, height: number, radius: number, tint: ARGBColor): void;
+    imageTinted(handle: ScriptImage, x: number, y: number, width: number, height: number, radius: number, tint: ARGBColor): void;
     /** Releases a GPU image previously obtained from `loadImage` and frees its backend resources. */
-    destroyImage(handle: GpuImageHandle): void;
+    destroyImage(handle: ScriptImage): void;
 
     /** Begins a new custom vector path. Subsequent `moveTo`/`lineTo`/`quadTo`/`cubicTo` calls build it. */
     beginPath(): void;
@@ -1260,7 +1437,7 @@ interface RendererProxy {
     /** Measures the rendered height of a string without drawing it. */
     textHeight(fontName: FontName, text: string, size: number): number;
     /** Wraps a string into lines that each fit within `width`. */
-    wrapText(fontName: FontName, text: string, width: number, size: number): JavaList<string>;
+    wrapText(fontName: FontName, text: string, width: number, size: number): ScriptList<string>;
     /** Trims a string to fit within `width`, appending an ellipsis if truncated. */
     trimText(fontName: FontName, text: string, width: number, size: number): string;
 
