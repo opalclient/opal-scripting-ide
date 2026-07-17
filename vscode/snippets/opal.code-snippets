@@ -149,5 +149,62 @@
             "overlay.showIsland(${1:island});",
             "$0"
         ]
+    },
+
+    "Opal: Chat Criteria": {
+        "prefix": "opal-criteria",
+        "scope": "javascript",
+        "description": "client.criteria(pattern) + chatReceived filter — compile a chat-line template once and match incoming messages against it (see reference/core.mdx).",
+        "body": [
+            "const ${1:greeting} = client.criteria(\"<\\${player}> \\${message}\");",
+            "",
+            "module.on(\"chatReceived\", (event) => {",
+            "    const ${2:m} = ${1:greeting}.match(event.getMessage());",
+            "    if (${2:m} === null) return;",
+            "    client.print(${2:m}.player + \" said \" + ${2:m}.message);",
+            "    $0",
+            "});"
+        ]
+    },
+
+    "Opal: Script Manifest Header": {
+        "prefix": "opal-manifest",
+        "scope": "javascript",
+        "description": "// ==OpalScript== metadata header — an optional, recommended comment block. Parsed at load; forward-looking for update checks and the script gallery.",
+        "body": [
+            "// ==OpalScript==",
+            "// @name       ${1:My Script}",
+            "// @version    ${2:1.0.0}",
+            "// @author     ${3:You}",
+            "// @minClient  ${4:26.2}",
+            "// @capability ${5:render, chat}",
+            "// ==/OpalScript==",
+            "$0"
+        ]
+    },
+
+    "Opal: Render Screen Handler": {
+        "prefix": "opal-render",
+        "scope": "javascript",
+        "description": "module.on(\"renderScreen\", ...) — 2D HUD drawing, with the partial tick and cursor position read off the event (see events.mdx / ui/renderer.mdx).",
+        "body": [
+            "module.on(\"renderScreen\", (event) => {",
+            "    const ${1:tickDelta} = event.getPartialTicks();",
+            "    renderer.text(\"productsans-bold\", \"${2:Hello}\", ${3:10}, ${4:10}, 9, renderer.color(255, 255, 255));",
+            "    ${0:// event.getMouseX() / event.getMouseY() give the GUI-scaled cursor position}",
+            "});"
+        ]
+    },
+
+    "Opal: Iterate ScriptList": {
+        "prefix": "opal-list",
+        "scope": "javascript",
+        "description": "for..of over a ScriptList — the read-only array returned by world.getEntities(), modules.listAll(), and similar (see world/types.mdx).",
+        "body": [
+            "const ${1:entities} = ${2:world.getLivingEntitiesInRange(16)};",
+            "for (const ${3:entity} of ${1:entities}) {",
+            "    ${0:// list.length and list[i] work too; the list is read-only}",
+            "}"
+        ]
     }
 }
