@@ -18,10 +18,11 @@ This is a monorepo of two independent editor integrations built against the same
   experience for JetBrains editors: ambient type definitions, live templates, and a matching
   new-script action.
 
-Both integrations are generated from the same ground truth: the scripting docs shipped in
+Both integrations are hand-maintained against the same ground truth: the scripting docs shipped in
 `resources/docs/en/scripting/` in the main Opal client repository (events, settings, and one
-reference page per proxy global). If the runtime API changes, that's where the fix starts. The
-editor tooling here should be regenerated to match, not hand-patched to disagree with it.
+reference page per proxy global), verified against the Java proxies that actually run. There is no
+generator yet — each plugin's type definitions are written and updated by hand. If the runtime API
+changes, update the docs first, then bring both plugins back in line.
 
 ## Repository layout
 

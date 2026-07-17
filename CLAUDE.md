@@ -33,8 +33,9 @@ either plugin should trace back to a `<Method>` tag in those docs, not to guessw
   `HostAccess.EXPLICIT`: default-deny, with no member access on un-annotated types, no
   bean-property mapping, and no container access. Anything that is not a primitive, a `String`, or
   an `@HostAccess.Export`-annotated member is invisible — *silently*, as `undefined`. So: getters
-  never properties (`box.getX()`, not `box.x`), `ScriptList` never arrays (`size()`/`get(i)`, not
-  `.length`/`for..of`), and a memberless brand type genuinely has no members. A wrong signature
+  never properties (`box.getX()`, not `box.x`), a `ScriptList` reads as a read-only array
+  (`length`, `[i]`, `for..of`, and still `size()`/`get(i)`) but refuses writes, and a memberless
+  brand type genuinely has no members. A wrong signature
   here is worse than a missing one — it is what script authors code against, and it fails quietly
   in-game rather than loudly in an editor.
 - **`vscode/typings/opal-globals.d.ts` is the single highest-value file in this repo.** It is a pure
