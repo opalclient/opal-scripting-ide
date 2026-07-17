@@ -15,7 +15,11 @@ script.registerModule({
     });
 
     module.on("preGameTick", () => {
-        if (mc.player === null || mc.world === null) return;
+        // Always null-check — there is no player or world in menus and on
+        // loading screens. Note it is mc.getPlayer(), never mc.player: the
+        // sandbox does no bean-property mapping, so the property form reads
+        // undefined and the guard silently never fires.
+        if (mc.getPlayer() === null || mc.getWorld() === null) return;
         if (!module.getBool("Enabled")) return;
 
         // Your per-tick logic here.

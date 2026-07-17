@@ -149,13 +149,21 @@ intellij/
   no such file type -- Opal scripts are plain `.js`. This means the
   `opal*` abbreviations are technically available in any file, not just
   Opal scripts.
-- `opal-globals.d.ts` models the scripting API as documented in
-  `opalclient/resources/docs/en/scripting/**`. Two of that doc set's older,
-  pre-reorganization pages (`reference/interaction.mdx`'s `player`/`inventory`
-  examples, and `intro.mdx`'s `eyePos.getY()` snippet) contradict the newer,
-  more precise `character/player.mdx` and `world/types.mdx` pages about
-  whether `Vec3d`'s methods are callable by readable name from script code --
-  they are not (Fabric intermediary mappings rename them at runtime). This
-  file follows the newer, more precise pages: `Vec3d`/`Vec3i`/`MathHelper`
-  are modeled as opaque construct-and-pass-through types with no callable
-  instance methods, matching the documented runtime behaviour.
+- `opal-globals.d.ts` models the scripting API as it actually runs. Where the
+  docs in `opalclient/resources/docs/en/scripting/**` and the Java proxies
+  under `wtf/opal/scripting/` disagree, the Java wins -- it is what executes.
+  Several doc pages taught idioms that never worked, and one of them
+  (`WorldProxy`'s class javadoc) is the likely origin of the `mc.player`
+  pattern that then spread across the whole example gallery.
+- **`Vec3d`'s methods are callable, and the old reason they weren't was wrong
+  twice over.** This file used to model `Vec3d`/`Vec3i`/`MathHelper` as opaque
+  construct-and-pass-through types, siding with `character/player.mdx` and
+  `world/types.mdx` against `intro.mdx`'s `eyePos.getY()` snippet, on the
+  grounds that "Fabric intermediary mappings rename them at runtime". That
+  diagnosis was never right: the client is on Mojang mappings, and the real
+  cause was the sandbox -- GraalVM `HostAccess.EXPLICIT` reaches only members
+  annotated `@HostAccess.Export`, and a raw Mojang `Vec3` carries none. The
+  fix upstream was to wrap the inert types rather than widen the policy, so
+  `Vec3d` is now the `ScriptVec3` wrapper: constructible, with `getX()` /
+  `getY()` / `getZ()` reading fine. `Vec3i` was removed outright; `MathHelper`
+  is still bound raw and so is still genuinely unusable.

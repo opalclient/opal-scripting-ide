@@ -274,8 +274,11 @@ script.registerModule({
     });
 
     module.on("preGameTick", () => {
-        // Always null-check — these are null in menus and loading screens.
-        if (mc.player === null || mc.world === null) return;
+        // Always null-check — there is no player or world in menus and on
+        // loading screens. Note it is mc.getPlayer(), never mc.player: the
+        // sandbox does no bean-property mapping, so the property form reads
+        // undefined and the guard silently never fires.
+        if (mc.getPlayer() === null || mc.getWorld() === null) return;
         if (!module.getBool("Enabled")) return;
 
         // const speed = module.getNumber("Speed");
@@ -284,9 +287,13 @@ script.registerModule({
         // Runs 20 times/second — this is where your per-tick logic goes.
     });
 
+    // Uncomment to bind this module to a key by default.
+    // module.setBind(keys.F7);
+
     // Renderer calls only work during render events — uncomment to draw
     // on the HUD (see the Renderer reference for the full drawing API).
-    // module.on("renderScreen", (event) => {
+    // The event payload carries nothing readable; use client.getTickDelta().
+    // module.on("renderScreen", () => {
     //     renderer.text("productsans-medium", "${safeName}", 10, 10, 8, renderer.color(255, 255, 255));
     // });
 });

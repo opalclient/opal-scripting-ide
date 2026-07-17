@@ -21,10 +21,22 @@ either plugin should trace back to a `<Method>` tag in those docs, not to guessw
 
 ## Patterns that matter
 
-- **The docs are ground truth, this repo is a derived artifact.** If the scripting API changes
-  upstream, the fix starts in the docs repo, then gets re-derived into `vscode/typings/opal-globals.d.ts`
-  (and the JetBrains equivalent). Don't hand-invent a method signature that isn't backed by a
-  documented `<Method>` tag.
+- **The Java is ground truth. The docs are a derived artifact, and they have been wrong.** The
+  authority for any signature is the `@HostAccess.Export` set on the proxies under
+  `src/main/java/wtf/opal/scripting/` in the opal client repo. Use the docs for prose, but when
+  they disagree with the Java, the Java wins — it is what executes. Several doc pages taught
+  idioms that never worked at runtime (a `mc.player` example in `WorldProxy`'s class javadoc is
+  the likely origin of a pattern that then spread to 27 call sites across the example gallery).
+  Don't hand-invent a signature, and don't trust a `<Method>` tag you haven't checked against the
+  Java.
+- **The sandbox is why the types look the way they do.** Scripts run under GraalVM
+  `HostAccess.EXPLICIT`: default-deny, with no member access on un-annotated types, no
+  bean-property mapping, and no container access. Anything that is not a primitive, a `String`, or
+  an `@HostAccess.Export`-annotated member is invisible — *silently*, as `undefined`. So: getters
+  never properties (`box.getX()`, not `box.x`), `ScriptList` never arrays (`size()`/`get(i)`, not
+  `.length`/`for..of`), and a memberless brand type genuinely has no members. A wrong signature
+  here is worse than a missing one — it is what script authors code against, and it fails quietly
+  in-game rather than loudly in an editor.
 - **`vscode/typings/opal-globals.d.ts` is the single highest-value file in this repo.** It is a pure
   ambient global declaration file (no top-level `import`/`export`) so TypeScript treats every
   interface and `declare const` as global scope — exactly matching how the runtime injects these
@@ -50,9 +62,10 @@ either plugin should trace back to a `<Method>` tag in those docs, not to guessw
     governance touched by whichever agent gets there first — keep edits to them minimal and
     single-purpose so they're easy for a human to reconcile across the two branches.
 - Don't add a `checkJs`-on-by-default posture to the VS Code IntelliSense setup — Opal scripts are
-  loose JS with full-trust Java interop, and turning on strict checking globally would flood users
-  who haven't opted in with noise. Type information should be additive (hover/autocomplete), not
-  enforcement, unless a user explicitly adds `// @ts-check` to their own file.
+  loose JS calling into a sandboxed, unchecked-at-compile-time Java interop surface, and turning on
+  strict checking globally would flood users who haven't opted in with noise. Type information
+  should be additive (hover/autocomplete), not enforcement, unless a user explicitly adds
+  `// @ts-check` to their own file.
 - Don't fabricate API surface. If a doc page doesn't mention a method, it doesn't go in the type
   definitions — an incomplete-but-accurate `.d.ts` is far more useful than a complete-but-wrong one,
   since a wrong signature actively misleads autocomplete.
