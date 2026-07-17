@@ -43,6 +43,40 @@ and scaffold command all run against a plain `.js` workspace; see `vscode/README
 `./gradlew buildPlugin`; see `intellij/README.md` for its current status and the Gradle/IntelliJ
 Platform version it targets.
 
+## Installing from a release
+
+Tagged releases on GitHub attach both plugins as prebuilt files, so you can install without a build:
+
+- **VS Code** (`.vsix`): download the `opal-scripting-*.vsix` asset, open the Extensions view, click
+  the `...` menu, choose **Install from VSIX...**, and point it at the file. From a terminal the
+  same thing is `code --install-extension opal-scripting-<version>.vsix`.
+- **JetBrains** (`.zip`): download the `opal-scripting-intellij-*.zip` asset, then open
+  **Settings / Preferences -> Plugins -> gear icon -> Install Plugin from Disk...** in IntelliJ IDEA
+  or WebStorm and select the zip. Leave it zipped; the IDE reads the packaged form. Restart when
+  prompted.
+
+Neither plugin is on its marketplace yet, so the release assets are how you install a build you
+didn't compile yourself.
+
+## Building the artifacts
+
+To produce those same files locally, for a release or to test a change:
+
+- **VS Code `.vsix`** — from `vscode/`:
+  ```bash
+  npm install
+  npm run compile
+  npx vsce package        # writes opal-scripting-<version>.vsix
+  ```
+- **JetBrains zip** — from `intellij/`:
+  ```bash
+  ./gradlew buildPlugin    # or gradlew.bat on Windows
+  # writes build/distributions/opal-scripting-intellij-<version>.zip
+  ```
+
+Attach the two files to the GitHub Release for the tag. Each subproject's README covers running from
+source and iterating in a live dev host.
+
 ## For AI agents
 
 See [`CLAUDE.md`](CLAUDE.md) for the mental model an assistant needs before touching this repo, and
