@@ -48,8 +48,9 @@ All notable changes to the Opal Scripting VS Code extension are documented in th
 - Dropped the `movement.getMoveYaw(from, to)` overload and the `Vector2d` type it took. The
   overload exists on the host proxy but is uncallable from a script: its parameters are JOML
   `Vector2d`s and no global binds that class, so an argument for it cannot be built.
-- `MathHelper` is documented as unusable rather than merely awkward — it is bound as the raw
-  Mojang `Mth` class, so every call on it is denied.
+- `MathHelper` has been removed entirely (it was bound as the raw Mojang `Mth` class with no
+  exported methods, so every call on it was already denied — use JavaScript's `Math`), and
+  `world.getBlockId(pos)` was added as a locale-safe, registry-id alternative to `getBlockName(pos)`.
 - The "New Opal Script" scaffold no longer seeds `if (mc.player === null || mc.world === null)`
   into every generated script, which is where much of the broken pattern came from.
 - Finished event payload coverage and unified the cancel API. `PreMoveEvent`, `PostMoveEvent`,
