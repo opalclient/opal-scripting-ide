@@ -2,7 +2,7 @@
   "name": "opal-scripting",
   "displayName": "Opal Scripting",
   "description": "IntelliSense, snippets, and scaffolding for Opal's GraalVM JavaScript scripting engine — hover docs and autocomplete for client, player, world, renderer, and every other ambient global, plus a script scaffolder.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "opalclient",
   "license": "MIT",
   "engines": {
