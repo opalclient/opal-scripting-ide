@@ -1,1259 +1,79 @@
-// Opal Scripting API — ambient global type declarations
-//
-// This file is NOT a module (no top-level import/export), so every
-// declaration below is a true global, exactly matching what the GraalVM
-// JavaScript engine injects into a script's scope at runtime. Drop it
-// anywhere under a project's content root (the "Insert/Update Opal Type
-// Definitions" action and the "New Opal Script" scaffold both do this for
-// you) and WebStorm / IntelliJ IDEA's built-in JavaScript engine will offer
-// full completion, parameter hints, and quick docs for `client`, `player`,
-// `world`, `renderer`, and the rest of the proxy globals in every plain .js
-// script — no tsconfig.json, no import statement, no build step.
-//
-// Source of truth: opalclient/resources/docs/en/scripting/**, and — where the
-// two ever disagree — the Java proxies under wtf/opal/scripting/ in the opal
-// client repo, which is what actually runs. Keep this file in sync when the
-// scripting API changes.
-//
-// WHAT THE SANDBOX MEANS FOR THE TYPES BELOW
-// -------------------------------------------
-// Scripts run under GraalVM `HostAccess.EXPLICIT`: default-deny. It grants no
-// member access on un-annotated types, no bean-property mapping, and no
-// container access. Anything that is not a primitive, a String, or a member
-// annotated `@HostAccess.Export` is invisible to a script — and invisible
-// *silently*: a property read on a raw object is `undefined`, never an error.
-//
-// So three rules hold everywhere here, and a type that breaks one is a bug:
-//   • Getters, never properties. `box.getX()`, not `box.x`. `mc.getPlayer()`,
-//     not `mc.player`.
-//   • Containers are `ScriptList<T>` — a read-only array (`length`, `[i]`,
-//     `for..of`, spread) that also keeps `size()`/`isEmpty()`/`get(i)`.
-//   • A type declared with no members (`HitResult`, `ClientLevel`) has none,
-//     deliberately. Do not add speculative ones.
-//
-// A wrong signature here is worse than a missing one: it is what a script
-// author writes their code against. This file previously promised `mc.player`,
-// an iterable `JavaList` with `.length`, and raw `Vector4d`/`ItemStack`/
-// `BlockState` types — none of which existed at runtime, and the gallery
-// scripts written against them silently did nothing in-game.
-//
-// Generated for the Opal Scripting IDE plugin (JetBrains). See also the
-// VS Code extension's equivalent type shim.
-
-// ---------------------------------------------------------------------------
-// Script registration
-// ---------------------------------------------------------------------------
-
-/** Config object passed to {@link registerScript}. */
-interface OpalScriptConfig {
-    /** Display name of the script, shown in `.script list` / `.script info`. */
-    name: string;
-    /** Free-form version string (metadata only, max 16 characters when published). */
-    version: string;
-    /** Author name(s) shown in `.script info`. */
-    authors: string[];
-}
-
-/** Config object passed to {@link OpalScript.registerModule}. */
-interface OpalModuleConfig {
-    /** Module display name, shown in the ClickGUI and matched by `modules.*`. */
-    name: string;
-    /** One-line description shown in the ClickGUI. */
-    description: string;
-}
-
-/** Handle returned by {@link registerScript}, used to register one or more modules. */
-interface OpalScript {
-    /**
-     * Registers a script module. The callback receives the module handle
-     * used to define settings and attach event handlers. All settings
-     * (`addBool`/`addNumber`/`addMode`/`addGroup`) must be defined
-     * synchronously inside this callback, before any `module.on(...)` calls.
-     */
-    registerModule(config: OpalModuleConfig, callback: (module: OpalModule) => void): void;
-}
+/*
+ * This file is a synced downstream copy, not the source of truth.
+ * Canonical: the opalclient/scripts repo, packages/opal-types/opal-globals.d.ts.
+ * Make scripting API changes there first, then resync this copy — do not
+ * hand-edit the API surface here.
+ */
 
 /**
- * Registers a new script entry point. Call this once per script file.
- * Returns a handle used to register one or more modules.
+ * Opal scripting engine — canonical ambient global type definitions.
  *
- * ```javascript
- * const script = registerScript({ name: "My Script", version: "1.0.0", authors: ["User"] });
- * ```
- */
-declare function registerScript(config: OpalScriptConfig): OpalScript;
-
-// ---------------------------------------------------------------------------
-// Module: settings + events
-// ---------------------------------------------------------------------------
-
-/**
- * The module handle passed into a `registerModule` callback. Exposes the
- * settings API (`addBool`/`addNumber`/`addMode`/`addGroup` + matching
- * getters/setters) and the event subscription API (`on`).
- */
-interface OpalModule {
-    // -- Settings: definition ------------------------------------------------
-
-    /** Adds a boolean (toggle) setting. Appears as a switch in the ClickGUI. */
-    addBool(name: string, defaultValue: boolean): void;
-
-    /** Adds a numeric (slider) setting. Appears as a slider in the ClickGUI. */
-    addNumber(name: string, defaultValue: number, min: number, max: number, step: number): void;
-
-    /**
-     * Adds a mode (dropdown) setting. Pass a plain JS array of option
-     * strings — no Java enum required. The first option is the default.
-     */
-    addMode(name: string, options: string[]): void;
-
-    /**
-     * Groups one or more previously defined settings under a collapsible
-     * header. Must be called *after* the settings it references; unmatched
-     * names are ignored.
-     */
-    addGroup(name: string, settingNames: string[]): void;
-
-    // -- Settings: read/write -------------------------------------------------
-
-    /** Returns the current value of a boolean setting (false if it doesn't exist). */
-    getBool(name: string): boolean;
-    /** Sets a boolean setting's value. No-ops if the setting doesn't exist. */
-    setBool(name: string, value: boolean): void;
-
-    /** Returns the current value of a numeric setting (0.0 if it doesn't exist). */
-    getNumber(name: string): number;
-    /** Sets a numeric setting's value. No-ops if the setting doesn't exist. */
-    setNumber(name: string, value: number): void;
-
-    /** Returns the currently selected option of a mode setting ("" if it doesn't exist). */
-    getMode(name: string): string;
-    /** Case-insensitive check of whether a mode setting equals a given option. */
-    isModeEqual(name: string, option: string): boolean;
-
-    // -- Binds ----------------------------------------------------------------
-
-    /**
-     * Binds this module to a key, so it toggles without a trip through the
-     * binds menu. Pass a `keys.*` code — `module.setBind(keys.F7)`. A user's
-     * own rebind wins over this and survives a `.script reload`, so calling
-     * this at registration sets a *default*, not a lock.
-     */
-    setBind(code: number): void;
-    /** The module's current bind code, or `keys.NONE` when unbound. */
-    getBind(): number;
-    /** Removes the module's bind, leaving it toggleable only from the ClickGUI. */
-    clearBind(): void;
-
-    // -- Events ---------------------------------------------------------------
-
-    /** Fired when the module is toggled on. Resets suppressed error reporting. */
-    on(event: "enable", handler: () => void): void;
-    /** Fired when the module is toggled off. Any owned Dynamic Islands are cleaned up. */
-    on(event: "disable", handler: () => void): void;
-
-    /** Start of the 20 TPS client tick, before vanilla tick logic runs. */
-    on(event: "preGameTick", handler: (event: OpalEmptyEvent) => void): void;
-    /** End of the 20 TPS client tick, after vanilla tick logic has run. */
-    on(event: "postGameTick", handler: (event: OpalEmptyEvent) => void): void;
-
-    /** During the 2D HUD pass. The event carries the partial tick and cursor position; draw with `renderer` here. */
-    on(event: "renderScreen", handler: (event: ScriptRenderScreenEvent) => void): void;
-    /** During the 3D world pass. The event carries the partial tick; use `esp.*` for world-space projection. */
-    on(event: "renderWorld", handler: (event: ScriptRenderEvent) => void): void;
-    /** During the HUD bloom pass; shapes drawn here feed the glow/bloom effect. */
-    on(event: "renderBloom", handler: (event: ScriptRenderEvent) => void): void;
-
-    /** Before the player's movement is applied for the tick. Cancellable. */
-    on(event: "preMove", handler: (event: OpalPreMoveEvent) => void): void;
-    /** After the player's movement has been applied. Not cancellable. */
-    on(event: "postMove", handler: (event: OpalPostMoveEvent) => void): void;
-    /** Before the movement packet is sent. Cancellable; lets you rewrite position/rotation/flags. */
-    on(event: "preMovementPacket", handler: (event: OpalPreMovementPacketEvent) => void): void;
-    /** After the movement packet has been sent. Read-only, not cancellable. */
-    on(event: "postMovementPacket", handler: (event: OpalPostMovementPacketEvent) => void): void;
-
-    /** An outbound packet is about to be sent (main thread). Cancellable. */
-    on(event: "sendPacket", handler: (event: OpalPacketEvent) => void): void;
-    /** An inbound packet was received, before it is handled (main thread). Cancellable. */
-    on(event: "receivePacket", handler: (event: OpalPacketEvent) => void): void;
-    /** An outbound packet is sent immediately on the network thread. Cancellable. */
-    on(event: "instantaneousSendPacket", handler: (event: OpalPacketEvent) => void): void;
-    /** An inbound packet is received on the network thread, before main-thread queueing. Cancellable. */
-    on(event: "instantaneousReceivePacket", handler: (event: OpalPacketEvent) => void): void;
-
-    /** The player attacks an entity, before the interaction is processed. Not cancellable. */
-    on(event: "attack", handler: (event: OpalAttackEvent) => void): void;
-    /** The player swings an arm, before the swing is sent. Record event, not cancellable. */
-    on(event: "swing", handler: (event: OpalSwingEvent) => void): void;
-    /** The player uses (right-clicks) the held item. Carries no data. Not cancellable. */
-    on(event: "itemUse", handler: (event: OpalEmptyEvent) => void): void;
-    /** Before the jump impulse is applied. Cancellable. */
-    on(event: "jump", handler: (event: OpalJumpEvent) => void): void;
-
-    /** The local player joins a world, after the client world is initialised. Carries no data. */
-    on(event: "joinWorld", handler: (event: OpalEmptyEvent) => void): void;
-    /** A loaded block changes state. Not cancellable. */
-    on(event: "blockUpdate", handler: (event: OpalBlockUpdateEvent) => void): void;
-    /** Before connecting to a multiplayer server. Cancellable — cancel to abort. */
-    on(event: "serverConnect", handler: (event: OpalServerConnectEvent) => void): void;
-    /** The client disconnects from a server. Carries no data. Not cancellable. */
-    on(event: "serverDisconnect", handler: (event: OpalEmptyEvent) => void): void;
-
-    /** A chat message is received from the server, before it is shown. Cancellable. */
-    on(event: "chatReceived", handler: (event: OpalChatReceivedEvent) => void): void;
-
-    /** A keyboard key is pressed. Carries the GLFW key code. Not cancellable. */
-    on(event: "keyPress", handler: (event: OpalKeyPressEvent) => void): void;
-    /** A mouse button is pressed. Carries the GLFW button code. Not cancellable. */
-    on(event: "mousePress", handler: (event: OpalMousePressEvent) => void): void;
-    /** The GUI is resized (framebuffer resolution changed). Carries no data. Not cancellable. */
-    on(event: "resolutionChange", handler: (event: OpalEmptyEvent) => void): void;
-
-    /** Fallback overload for forward-compatibility with events not yet in this file. */
-    on(event: string, handler: (event: any) => void): void;
-}
-
-// ---------------------------------------------------------------------------
-// Event payloads
-// ---------------------------------------------------------------------------
-
-/** Base shape shared by every cancellable event payload. Every cancellable
- * payload in this file extends this interface; there is no separate
- * accessor shape to worry about. */
-interface OpalCancellable {
-    /** Whether the event has already been cancelled by another handler. */
-    isCancelled(): boolean;
-    /** Cancels the event. The flag cannot be cleared once set. */
-    cancel(): void;
-}
-
-/** Lifecycle / lifecycle-adjacent events that carry no data (see the table in events.mdx). */
-interface OpalEmptyEvent {}
-
-/**
- * The `renderScreen` payload, wrapping the runtime `ScriptRenderScreenEvent`.
- * Fired during the 2D HUD pass, the one render pass that also carries the
- * cursor position. Draw through the `renderer` global; it already targets the
- * frame's canvas.
- */
-interface ScriptRenderScreenEvent {
-    /** Fractional progress through the current tick, in `[0, 1)`. Matches `client.getTickDelta()` for this frame; use it to interpolate motion. */
-    getPartialTicks(): number;
-    /** Cursor x in GUI-scaled coordinates. */
-    getMouseX(): number;
-    /** Cursor y in GUI-scaled coordinates. */
-    getMouseY(): number;
-    toString(): string;
-}
-
-/**
- * The payload for the two tick-only render passes, `renderWorld` and
- * `renderBloom`, wrapping the runtime `ScriptRenderEvent`. It carries the
- * partial tick but no cursor position, which belongs to the screen pass. Use
- * `esp.*` for world-space projection under `renderWorld`; shapes drawn under
- * `renderBloom` feed the glow pass instead of showing directly.
- */
-interface ScriptRenderEvent {
-    /** Fractional progress through the current tick, in `[0, 1)`. Interpolate positions against it for a smooth trail. */
-    getPartialTicks(): number;
-    toString(): string;
-}
-
-interface OpalPreMoveEvent extends OpalCancellable {
-    getSpeed(): number;
-    /** X component of the directional movement input for the step. */
-    getInputX(): number;
-    /** Y component of the directional movement input for the step. */
-    getInputY(): number;
-    /** Z component of the directional movement input for the step. */
-    getInputZ(): number;
-}
-
-interface OpalPostMoveEvent {
-    getSpeed(): number;
-    getInputX(): number;
-    getInputY(): number;
-    getInputZ(): number;
-}
-
-interface OpalPreMovementPacketEvent extends OpalCancellable {
-    getX(): number;
-    getY(): number;
-    getZ(): number;
-    setX(x: number): void;
-    setY(y: number): void;
-    setZ(z: number): void;
-    getYaw(): number;
-    getPitch(): number;
-    setYaw(yaw: number): void;
-    setPitch(pitch: number): void;
-    isOnGround(): boolean;
-    setOnGround(onGround: boolean): void;
-    isSprinting(): boolean;
-    setSprinting(sprinting: boolean): void;
-    isHorizontalCollision(): boolean;
-    setHorizontalCollision(horizontalCollision: boolean): void;
-    isForceInput(): boolean;
-    setForceInput(forceInput: boolean): void;
-}
-
-interface OpalPostMovementPacketEvent {
-    getX(): number;
-    getY(): number;
-    getZ(): number;
-    getYaw(): number;
-    getPitch(): number;
-    isOnGround(): boolean;
-    isSprinting(): boolean;
-}
-
-/** Shared payload for sendPacket / receivePacket / instantaneous* packet
- * events. */
-interface OpalPacketEvent extends OpalCancellable {
-    /** Simple class name of the wrapped packet, e.g. `"ServerboundMovePlayerPacket"`. */
-    getType(): string;
-}
-
-interface OpalAttackEvent {
-    /** The entity being attacked. The flattened getters below are shortcuts for its reads. */
-    getTarget(): Entity;
-    /** Display name of the entity being attacked. */
-    getTargetName(): string;
-    /** Entity id of the target. */
-    getTargetId(): number;
-    /** Target's current health, or `-1` if the target is not a living entity. */
-    getTargetHealth(): number;
-    /** Target's maximum health, or `-1` if the target is not a living entity. */
-    getTargetMaxHealth(): number;
-    /** Distance to the target, or `-1` if unavailable. */
-    getTargetDistance(): number;
-}
-
-interface OpalSwingEvent {
-    /** Whether the main hand (as opposed to the off hand) is swinging. */
-    isMainHand(): boolean;
-}
-
-interface OpalJumpEvent extends OpalCancellable {
-    isSprinting(): boolean;
-    /** Overrides whether the jump is treated as a sprint jump. */
-    setSprinting(sprinting: boolean): void;
-}
-
-interface OpalBlockUpdateEvent {
-    /** X coordinate where the block change occurred. */
-    getX(): number;
-    /** Y coordinate where the block change occurred. */
-    getY(): number;
-    /** Z coordinate where the block change occurred. */
-    getZ(): number;
-    /** Display name of the block before the update (e.g. "Air", "Stone"). */
-    getOldBlock(): string;
-    /** Display name of the block after the update (e.g. "Air", "Stone"). */
-    getNewBlock(): string;
-}
-
-interface OpalServerConnectEvent extends OpalCancellable {
-    /** Hostname or IP of the server being connected to. */
-    getHost(): string;
-    /** Port of the server being connected to. */
-    getPort(): number;
-    /** Combined `host:port` address of the server being connected to. */
-    getAddress(): string;
-}
-
-interface OpalChatReceivedEvent extends OpalCancellable {
-    /** The received chat message as plain text. */
-    getMessage(): string;
-    /** Whether this is an action-bar overlay message rather than a chat-line message. */
-    isOverlay(): boolean;
-    /** Reroutes the message to (true) or away from (false) the action bar. */
-    setOverlay(overlay: boolean): void;
-}
-
-interface OpalKeyPressEvent {
-    /** GLFW key code of the pressed key. */
-    getCode(): number;
-}
-
-interface OpalMousePressEvent {
-    /** GLFW button code of the pressed mouse button. */
-    getCode(): number;
-}
-
-// ---------------------------------------------------------------------------
-// client — ClientProxy
-// ---------------------------------------------------------------------------
-
-interface ClientProxy {
-    /** Prints a message to the local chat. Calls toString() on the object. */
-    print(o: any): void;
-    /** Prints a success-styled (green) message to the local chat. */
-    success(message: string): void;
-    /** Prints an error-styled (red) message to the local chat. */
-    error(message: string): void;
-
-    /** Whether a specific module is currently enabled. */
-    isModuleEnabled(id: string): boolean;
-    /** Toggles a module on or off. */
-    setModuleEnabled(id: string, enabled: boolean): void;
-
-    /** Sends a chat message to the server, exactly as if typed in the chat box. */
-    sendChat(message: string): void;
-    /** Runs a client command. The leading "/" is optional — "toggle Fly" and "/toggle Fly" both work. */
-    runCommand(command: string): void;
-
-    /** Compiles a reusable chat-line matcher. `${name}` placeholders capture; every other character matches literally. Compile once and reuse the handle across chat events. */
-    criteria(pattern: string): ScriptCriteria;
-
-    /** Width of the game window in scaled virtual pixels (affected by GUI scale). */
-    getScaledWidth(): number;
-    /** Height of the game window in scaled virtual pixels. */
-    getScaledHeight(): number;
-    /** Current GUI scale factor (e.g. 1.0, 2.0). */
-    getScaleFactor(): number;
-    /** Raw physical width of the window in pixels. */
-    getFramebufferWidth(): number;
-    /** Raw physical height of the window in pixels. */
-    getFramebufferHeight(): number;
-
-    /** Primary color of the active client theme as an ARGB integer. */
-    getThemePrimary(): number;
-    /** Secondary color of the active client theme as an ARGB integer. */
-    getThemeSecondary(): number;
-    /**
-     * Interpolates between the primary and secondary theme colors in a
-     * pulsing animation. Use `offset` to create gradients/waves across
-     * multiple elements.
-     */
-    getAnimatedThemeColor(speed: number, offset: number): number;
-
-    /** Partial tick time (0.0-1.0), for smooth rendering interpolation between ticks. */
-    getTickDelta(): number;
-    /** Current frames per second. */
-    getFPS(): number;
-}
-
-declare const client: ClientProxy;
-
-// ---------------------------------------------------------------------------
-// notification — NotificationProxy
-// ---------------------------------------------------------------------------
-
-interface NotificationProxy {
-    /** Displays a green success toast notification. `duration` is in ms (default 3000). */
-    success(title: string, description: string, duration?: number): void;
-    /** Displays a red error toast notification. */
-    error(title: string, description: string, duration?: number): void;
-    /** Displays a yellow warning toast notification. */
-    warn(title: string, description: string, duration?: number): void;
-    /** Displays a blue informational toast notification. */
-    info(title: string, description: string, duration?: number): void;
-    /** Displays a notification with a dynamic type: "SUCCESS" | "ERROR" | "WARN" | "INFO". */
-    show(type: "SUCCESS" | "ERROR" | "WARN" | "INFO" | string, title: string, description: string, duration?: number): void;
-}
-
-declare const notification: NotificationProxy;
-
-// ---------------------------------------------------------------------------
-// overlay — OverlayProxy (Dynamic Island HUD)
-// ---------------------------------------------------------------------------
-
-interface OpalIslandConfig {
-    width: number;
-    height: number;
-    /** Higher renders on top. */
-    priority: number;
-    /** Draws one frame of the island's content. */
-    render(posX: number, posY: number, width: number, height: number, progress: number): void;
-}
-
-interface OverlayProxy {
-    /** Creates a new Dynamic Island and returns its unique id. Does not show it — call `showIsland`. */
-    createIsland(config: OpalIslandConfig): string;
-    /** Activates the island, adding it to the render loop. */
-    showIsland(islandId: string): void;
-    /** Deactivates the island without destroying it. */
-    hideIsland(islandId: string): void;
-    /** Permanently deletes the island. */
-    destroyIsland(islandId: string): void;
-    /** Updates the content width dynamically. */
-    setIslandWidth(islandId: string, width: number): void;
-    /** Updates the height dynamically. */
-    setIslandHeight(islandId: string, height: number): void;
-    /** Updates the render priority (higher renders on top). */
-    setIslandPriority(islandId: string, priority: number): void;
-}
-
-declare const overlay: OverlayProxy;
-
-// ---------------------------------------------------------------------------
-// modules — ModulesProxy
-// ---------------------------------------------------------------------------
-
-interface ModulesProxy {
-    /** Whether a module with the given name is registered. */
-    exists(id: string): boolean;
-    /** Whether a module is currently enabled (false if it doesn't exist). */
-    isEnabled(id: string): boolean;
-    /** Enables or disables a module. No-ops silently if the module doesn't exist. */
-    setEnabled(id: string, enabled: boolean): void;
-    /** Toggles a module on or off. No-ops silently if the module doesn't exist. */
-    toggle(id: string): void;
-
-    /** Category name (e.g. "Combat", "Movement"), or null if not found. */
-    getCategory(id: string): string | null;
-    /** Arraylist suffix (often the active mode), or null. */
-    getSuffix(id: string): string | null;
-    /** Whether the module is shown in the arraylist/HUD. */
-    isVisible(id: string): boolean;
-    /** Sets arraylist visibility. No-ops silently if the module doesn't exist. */
-    setVisible(id: string, visible: boolean): void;
-
-    /** Display names of all registered modules (native and script-defined), as a `ScriptList<string>`. */
-    listAll(): ScriptList<string>;
-    /** Display names of modules in a category: Combat, Movement, Visual, World, Utility, or Scripts. */
-    listCategory(category: string): ScriptList<string>;
-    /** Display names of all currently enabled modules, as a `ScriptList<string>`. */
-    listEnabled(): ScriptList<string>;
-}
-
-declare const modules: ModulesProxy;
-
-// ---------------------------------------------------------------------------
-// mc — MinecraftProxy
-// ---------------------------------------------------------------------------
-
-interface InteractionManagerProxy {
-    /**
-     * Right-clicks a block face with the given hand. `hitResult` should come
-     * from `rotation.getRotationFromRaycastedBlock(...).getHitResult()`.
-     */
-    interactBlock(hand: InteractionHand, hitResult: HitResult): void;
-    /** Begins or updates block-breaking progress on the given position and face. */
-    updateBlockBreakingProgress(blockPos: BlockPos, direction: Direction): boolean;
-    /** Cancels any in-progress block breaking. */
-    cancelBlockBreaking(): void;
-    /** Whether a block break is currently in progress. */
-    isBreakingBlock(): boolean;
-
-    /** Attacks an entity with the local player's main hand. */
-    attackEntity(entity: Entity): void;
-    /** Uses the item in the given hand (right-click use, not on a block). */
-    interactItem(hand: InteractionHand): void;
-    /** Stops using an item (e.g. releasing a bow or stopping eating). */
-    stopUsingItem(): void;
-}
-
-/**
- * Null-safe access to Minecraft's player/world/interactionManager.
+ * `@opal-scripts/opal-types` is the SINGLE SOURCE OF TRUTH for the Opal
+ * scripting API surface. The IDE integrations (the "Opal Scripting" VS Code
+ * extension and the JetBrains plugin) each ship a copy of this file as their
+ * completion shim — they are downstream consumers of this package, not the
+ * source. When the scripting API changes, this file changes first.
  *
- * **There is no `mc.player` or `mc.world`.** GraalVM JS does no bean-property
- * mapping under `HostAccess.EXPLICIT`, so only the getter form resolves — the
- * property form reads `undefined`, which makes `mc.player === null` a guard
- * that never fires. The idiomatic guard at the top of an event callback is:
+ * SOURCE OF TRUTH FOR THE FILE ITSELF: generated from the client's exported
+ * scripting surface — its published scripting docs, and, where the two ever
+ * disagree, the Java proxies that actually run inside the client. Every
+ * member below corresponds to a documented method or table entry —
+ * signatures, params, and return types are not invented.
  *
- * ```javascript
- * if (mc.getPlayer() === null || mc.getWorld() === null) return;
- * ```
+ * The Opal GraalVM JS engine injects these names directly into every script's
+ * global scope — `client`, `player`, `world`, `renderer`, `notification`,
+ * `overlay`, `modules`, `mc`, `movement`, `rotation`, `inventory`, `esp`,
+ * `palette`, `keys`, `storage`, `timer`, `registerScript`, and the bound
+ * Java/wrapper types (`BlockPos`, `Vec2f`, `Color`, `MAIN_HAND`, …). There is
+ * no `import`/`require` step at runtime. This file mirrors that by declaring
+ * everything as ambient globals (no top-level `import`/`export`, which is what
+ * keeps TypeScript treating it as a global script rather than a module).
  *
- * Use the dedicated `player`, `world`, `movement`, `rotation`, and `inventory`
- * proxy globals for all actual behaviour.
- */
-interface MinecraftProxy {
-    /** Block and entity interaction. */
-    readonly interactionManager: InteractionManagerProxy;
-
-    /**
-     * The local player as a `ScriptEntity`, or `null` if not yet loaded. Good
-     * for a null guard, and readable for name/health/position — but for
-     * local-player state and movement prefer the richer `player` global.
-     */
-    getPlayer(): Entity | null;
-    /**
-     * The active client world, or `null` if not yet loaded. **Null-guard use
-     * only** — the returned value is an opaque token with no readable members.
-     * Every real world query lives on the `world` global.
-     */
-    getWorld(): ClientLevel | null;
-    /** Same as the `interactionManager` field; kept for completeness. */
-    getInteractionManager(): InteractionManagerProxy;
-}
-
-declare const mc: MinecraftProxy;
-
-/**
- * An opaque token from `mc.getWorld()`.
+ * Scripts run sandboxed (GraalVM `HostAccess.EXPLICIT`): only members
+ * explicitly annotated `@HostAccess.Export` on the proxy globals below, plus
+ * a small JDK allow-list, are reachable from script code — see `intro.mdx`.
+ * This file only describes the *shape* of that exposed API, not the sandbox
+ * boundary itself.
  *
- * **Deliberately memberless.** Comparing against `null` needs no member
- * access, so `mc.getWorld() === null` correctly answers "is the world loaded"
- * — the only thing this value is for. Every actual world query is flattened
- * onto the `world` global; use that.
+ * WHAT THAT POLICY MEANS FOR THE TYPES BELOW
+ * -------------------------------------------
+ * Default-deny is not a footnote — it is the reason this file looks the way it
+ * does. `HostAccess.EXPLICIT` grants no member access on un-annotated types,
+ * no bean-property mapping, and no container access. Anything that is not a
+ * primitive, a `String`, or an annotated wrapper is invisible to a script, and
+ * invisible *silently*: a property read on one is `undefined`, never an error.
+ *
+ * So three rules hold everywhere here, and a type that breaks one is a bug:
+ *   • Getters, never properties. `box.getX()`, not `box.x`. `mc.getPlayer()`,
+ *     not `mc.player`.
+ *   • Containers are `ScriptList<T>` — a read-only array (`length`, `[i]`,
+ *     `for..of`, spread) that also keeps `size()`/`isEmpty()`/`get(i)`.
+ *   • A type modelled as an opaque brand (`HitResult`, `ClientLevel`) has no
+ *     readable members at all, deliberately. Do not add speculative ones.
+ *
+ * A wrong signature here is worse than a missing one: it is what a script
+ * author writes their code against. This file previously promised `mc.player`,
+ * an iterable `JavaList` with `.length`, and raw `Vector4d`/`ItemStack`/
+ * `BlockState` types — none of which existed at runtime, and the gallery
+ * scripts written against them silently did nothing in-game.
  */
-interface ClientLevel {}
 
-// ---------------------------------------------------------------------------
-// player — PlayerProxy
-// ---------------------------------------------------------------------------
-
-interface PlayerProxy {
-    // -- Position -------------------------------------------------------------
-
-    /** Eye position in world space — the origin point for raycasts and rotation calculations. */
-    getEyePosition(): Vec3d;
-    /** Alias of `getEyePosition()`. */
-    getPosition(): Vec3d;
-    /** Floored block position, exposing readable `getX()`/`getY()`/`getZ()`. */
-    getBlockPosition(): BlockPos;
-    /** Current per-tick velocity (delta movement) vector. */
-    getVelocity(): Vec3d;
-    /** Current yaw (horizontal) rotation in degrees. */
-    getYaw(): number;
-    /** Current pitch (vertical) rotation in degrees. */
-    getPitch(): number;
-    /** How far the player has fallen since last touching ground, in blocks. */
-    getFallDistance(): number;
-
-    // -- State ------------------------------------------------------------------
-
-    isOnGround(): boolean;
-    isInAir(): boolean;
-    /** Ticks spent continuously in the air. */
-    getAirTicks(): number;
-    /** Ticks spent continuously on the ground. */
-    getGroundTicks(): number;
-    isSneaking(): boolean;
-    isSprinting(): boolean;
-    /** Whether the player is eating, drinking, blocking, drawing a bow, etc. */
-    isUsingItem(): boolean;
-
-    // -- Health -------------------------------------------------------------------
-
-    getHealth(): number;
-    getMaxHealth(): number;
-    /** Absorption (golden hearts) amount. */
-    getAbsorption(): number;
-    /** Armor points (0-20) from the currently worn armor. */
-    getArmor(): number;
-
-    // -- Effects ------------------------------------------------------------------
-
-    /**
-     * Whether the player currently has the named effect. Matched on the
-     * effect's display name, case-insensitively — `hasEffect("strength")`.
-     */
-    hasEffect(name: string): boolean;
-    /** The named active effect, or `null` if the player does not have it. */
-    getEffect(name: string): Effect | null;
-    /** Every effect currently active on the player, as a `ScriptList<Effect>`. */
-    getEffects(): ScriptList<Effect>;
-
-    // -- Combat -------------------------------------------------------------------
-
-    /** Whether the next attack would land a critical hit. */
-    canCrit(): boolean;
-    /** Attack damage of the item currently held in the main hand. */
-    getAttackDamage(): number;
-    /** Maximum distance, in blocks, at which the player can attack/interact with entities. */
-    getEntityInteractionRange(): number;
-    /** Whether the main-hand item is a weapon (sword, axe, or pickaxe). */
-    isHoldingWeapon(): boolean;
-
-    // -- Entity utilities -----------------------------------------------------------
-
-    /** Bounding-box distance to a living entity, or -1.0 if the entity is not living. */
-    getDistanceToEntity(entity: Entity): number;
-    /** Closest point on a living entity's bounding box to the player's eyes, or null if not living. */
-    getClosestPoint(entity: Entity): Vec3d | null;
-    /** Whether the player's box, shifted by the given offset, is free of collidable blocks. */
-    isBoxEmpty(offsetX: number, offsetY: number, offsetZ: number): boolean;
-    /** Whether the space directly below the player, at the given vertical offset, is empty. */
-    isBoxEmptyBelow(offsetY: number): boolean;
-    /** The player's axis-aligned bounding box. */
-    getBoundingBox(): Box3D;
-    /** Eye height above feet, in blocks. */
-    getStandingEyeHeight(): number;
-
-    // -- Actions ----------------------------------------------------------------
-
-    /** Plays the hand swing animation. Call after attacking or placing to trigger the visual swing. */
-    swingHand(hand: InteractionHand): void;
-    /** Uses (right-clicks) the item in the given hand and plays the swing animation. */
-    useItem(hand: InteractionHand): void;
-}
-
-declare const player: PlayerProxy;
-
-// ---------------------------------------------------------------------------
-// movement — MovementProxy
-// ---------------------------------------------------------------------------
-
-interface MovementProxy {
-    /** Current horizontal speed in blocks per second (roughly `getSpeed() * 20`). */
-    getBlocksPerSecond(): number;
-    /** Current horizontal speed as a raw velocity magnitude (blocks per tick). */
-    getSpeed(): number;
-    /** Whether the player is currently providing movement input (WASD or equivalent). */
-    isMoving(): boolean;
-
-    /** X/Z offsets for a given yaw direction and distance. A two-element `ScriptList`, not a tuple: `get(0)` is the X delta, `get(1)` the Z delta. */
-    yawPos(yaw: number, value: number): ScriptList<number>;
-    /** Sets the velocity of an arbitrary entity along a given yaw direction. */
-    setEntitySpeed(entity: Entity, speed: number, yaw: number): void;
-
-    /** Sets horizontal speed using the current movement input direction. */
-    setSpeed(speed: number): void;
-    /**
-     * Sets horizontal speed with a strafe blend (0.0 = forward, 1.0 = strafe)
-     * **or** along a specific yaw direction in degrees — these two overloads
-     * share a call shape (both take two plain numbers), so test the actual
-     * in-game behaviour before shipping a script that relies on this.
-     */
-    setSpeed(speed: number, strafePercentageOrYaw: number): void;
-
-    /** Adjusts a base speed by the player's Swiftness potion effect level (default multiplier). */
-    getSwiftnessSpeed(speed: number): number;
-    /** Adjusts a base speed by the player's Swiftness potion effect level using a custom multiplier. */
-    getSwiftnessSpeed(speed: number, swiftnessMultiplier: number): number;
-
-    /**
-     * Current movement yaw based on WASD input and camera rotation.
-     *
-     * There is a two-argument `getMoveYaw(from, to)` overload on the host
-     * proxy, but it is **not callable from a script**: its parameters are JOML
-     * `Vector2d`s, and no global binds that class, so there is no way to build
-     * an argument for it. It is deliberately not typed here.
-     */
-    getMoveYaw(): number;
-    /** Current movement direction in degrees, accounting for strafe and forward input. */
-    getDirectionDegrees(): number;
-    /** Movement direction in degrees for a specific yaw. */
-    getDirectionDegrees(yaw: number): number;
-    /** Current movement direction in radians. */
-    getDirectionRadians(): number;
-    /** Movement direction in radians for a specific yaw. */
-    getDirectionRadians(yaw: number): number;
-    /** Exact movement direction (radians) from raw input values. */
-    getDirection(rotationYaw: number, moveForward: number, moveStrafing: number): number;
-}
-
-declare const movement: MovementProxy;
-
-// ---------------------------------------------------------------------------
-// rotation — RotationProxy
-// ---------------------------------------------------------------------------
-
-interface RotationProxy {
-    // -- Stateful submission ------------------------------------------------------
-
-    /** Submits a target rotation using an instant (snap) model. Call every tick, not once. */
-    set(yaw: number, pitch: number): void;
-    /** Submits a target rotation using a linear (smooth) model capped to `speed` degrees/tick. */
-    setSmooth(yaw: number, pitch: number, speed: number): void;
-
-    // -- Rotation calculation (stateless) -----------------------------------------
-
-    /** Yaw/pitch needed to look at a world position from the player's current eye position. */
-    getRotationFromPosition(pos: Vec3d): Vec2f;
-    /** Yaw/pitch needed to look at the center of a specific block face. */
-    getRotationFromBlock(blockPos: BlockPos, direction: Direction): Vec2f;
-    /**
-     * Raytraced rotation to a block face, validated to actually hit the
-     * intended face within reach (the method Scaffold uses for placement).
-     * Returns null if no valid rotation exists.
-     */
-    getRotationFromRaycastedBlock(
-        blockPos: BlockPos,
-        side: Direction,
-        priorityRotations: Vec2f,
-        playerPos: Vec3d,
-    ): RaytracedRotation | null;
-    /**
-     * Raytraced rotation to a living entity, validated within range (the
-     * method KillAura uses). Returns null if no valid rotation exists.
-     */
-    getRotationFromRaycastedEntity(
-        entity: LivingEntity,
-        closestVector: Vec3d,
-        entityInteractionRange: number,
-    ): RaytracedRotation | null;
-    /** Unit look vector for the given pitch and yaw. */
-    getRotationVector(pitch: number, yaw: number): Vec3d;
-
-    // -- Queries & math -------------------------------------------------------------
-
-    /** Current server-side rotation as managed by the rotation handler. */
-    getRotation(): Vec2f;
-    /** Angular difference between two rotations, accounting for wrapping. */
-    getRotationDifference(a: Vec2f, b: Vec2f): number;
-    /** Raw cursor delta needed to achieve a rotation delta, given Minecraft's sensitivity multiplier. */
-    getCursorDelta(rotationDelta: number, sensitivityMultiplier: number): number;
-    /** Patches a rotation with small natural-looking jitter to avoid constant-delta detection. */
-    patchConstantRotation(rotation: Vec2f, prevRotation: Vec2f): Vec2f;
-    /** Snaps a rotation value to the nearest value achievable by Minecraft's sensitivity system. */
-    getSensitivityModifiedRotation(original: number): number;
-    /** Sent (server-side) rotation after sensitivity correction. */
-    getSentRotation(original: Vec2f): Vec2f;
-    /** Applies Minecraft's sensitivity curve to both axes of a rotation. */
-    getSensitivityModifiedRotationVec(original: Vec2f): Vec2f;
-    /** Converts a rotation to vanilla Minecraft mouse-look coordinates. */
-    getVanillaRotation(original: Vec2f): Vec2f;
-    /** Wraps a rotation value toward a target to avoid duplicate-angle detection. */
-    getDuplicateWrapped(value: number, target: number): number;
-
-    // -- FOV checks -------------------------------------------------------------------
-
-    /** Angular offset between the player's look direction and the direction to an entity. */
-    getEntityFOV(entity: Entity): number;
-    /** Whether an entity falls within a FOV cone (half-angle in degrees; 180 = full sphere). */
-    isEntityInFOV(entity: Entity, fov: number): boolean;
-}
-
-declare const rotation: RotationProxy;
-
-// ---------------------------------------------------------------------------
-// inventory — InventoryProxy
-// ---------------------------------------------------------------------------
-
-interface InventoryProxy {
-    // -- Slot switching -------------------------------------------------------------
-
-    /** Switches the selected hotbar slot normally (visible to client and server). */
-    setSlot(slot: number): void;
-    /** Switches the slot in default silent mode: server sees it, client render may be preserved. */
-    setSlotSilent(slot: number): void;
-    /** Switches the slot fully spoofed: server sees it, client keeps rendering the original item. */
-    setSlotFullSilent(slot: number): void;
-    /** Sends a raw selected-slot update packet for the given slot. */
-    sendSlotPacket(slot: number): void;
-    /** Currently selected hotbar slot index (0-8). */
-    getSelectedSlot(): number;
-
-    // -- Item searching ---------------------------------------------------------------
-
-    /** Searches the hotbar (0-8) for a placeable block. Returns -1 if none found. */
-    findBlock(): number;
-    /** Searches the hotbar (0-8) for an item by display-name substring (case-insensitive). */
-    findItem(itemName: string): number;
-    /** Searches the full inventory (0-35) for an item by display-name substring (case-insensitive). */
-    findItemInInventory(itemName: string): number;
-    /** Searches the hotbar (0-8) for an item by its stable registry id ("diamond" or "minecraft:diamond"). The id-keyed counterpart to `findItem`, correct for logic where display names are locale-dependent. Returns -1 if not found. */
-    findItemById(id: string): number;
-
-    // -- Stack inspection ---------------------------------------------------------------
-
-    /** Item stack in the given hotbar slot. */
-    getStack(slot: number): ItemStack | null;
-    /** Main hand item stack as resolved by the slot system (accounts for silent switching). */
-    getMainHandStack(): ItemStack | null;
-    /** Off hand item stack. */
-    getOffHandStack(): ItemStack | null;
-    /** Whether the main hand item is a placeable block. */
-    isHeldItemBlock(): boolean;
-    /** Whether the item in the given slot is a placeable block. */
-    isBlock(slot: number): boolean;
-    /** Display name of the item in the given slot ("" if empty). */
-    getItemName(slot: number): string;
-    /** Stack count of the item in the given slot. */
-    getItemCount(slot: number): number;
-    /** Total count of a specific item across the entire inventory (display-name substring, case-insensitive). */
-    countItem(itemName: string): number;
-    /** Total count of an item across the whole inventory (0-35) by its stable registry id ("diamond" or "minecraft:diamond"). The id-keyed counterpart to `countItem`. */
-    countItemById(id: string): number;
-    /** Total placeable blocks across the hotbar and off hand. */
-    countBlocks(): number;
-}
-
-declare const inventory: InventoryProxy;
-
-// ---------------------------------------------------------------------------
-// world — WorldProxy
-// ---------------------------------------------------------------------------
-
-interface WorldProxy {
-    // -- Block queries --------------------------------------------------------------
-
-    isAir(pos: BlockPos): boolean;
-    /** Whether the block can be replaced (air, fluid, grass, etc.). */
-    isReplaceable(pos: BlockPos): boolean;
-    isSolid(pos: BlockPos): boolean;
-    /** Localized display name of the block. */
-    getBlockName(pos: BlockPos): string;
-    /** Breaking hardness; -1 means unbreakable (bedrock). */
-    getBlockHardness(pos: BlockPos): number;
-
-    // -- Block helpers ----------------------------------------------------------------
-
-    /** Whether any face-adjacent block is solid (placeable-against). */
-    hasAdjacentBlock(pos: BlockPos): boolean;
-    /** Directions where a solid neighbour exists. Can be empty. */
-    getAdjacentDirections(pos: BlockPos): ScriptList<Direction>;
-
-    // -- Entity queries ----------------------------------------------------------------
-
-    /** All entities in the world. */
-    getEntities(): ScriptList<Entity>;
-    /** Living entities (mobs + players) within radius of the player, excluding self. */
-    getLivingEntitiesInRange(radius: number): ScriptList<Entity>;
-
-    // -- World info ------------------------------------------------------------------
-
-    /** World time in ticks. */
-    getTime(): number;
-    /** Time of day: 0=sunrise, 6000=noon, 12000=sunset, 18000=midnight. */
-    getTimeOfDay(): number;
-    /** Dimension identifier, e.g. "minecraft:overworld". */
-    getDimension(): string;
-}
-
-declare const world: WorldProxy;
-
-// ---------------------------------------------------------------------------
-// esp — EspProxy (3D-to-2D projection)
-// ---------------------------------------------------------------------------
-
-interface EspProxy {
-    /**
-     * Projects an entity's 3D bounding box onto the screen. Pass
-     * `client.getTickDelta()` as `tickDelta`. Returns null if behind the
-     * camera or fully outside the viewport.
-     */
-    getEntityBox2D(entity: Entity, tickDelta: number): Box2D | null;
-    /** Projects a world point onto the screen. Returns null if behind the camera. */
-    project(worldX: number, worldY: number, worldZ: number, tickDelta: number): Vec3d | null;
-    /** Projects a Vec3d world position onto the screen. Convenience wrapper around `project`. */
-    projectVec(pos: Vec3d, tickDelta: number): Vec3d | null;
-
-    /** Smooth, camera-relative entity position at the current partial tick. Null for non-living entities. */
-    getInterpolatedPosition(entity: Entity, tickDelta: number): Vec3d | null;
-    /** Linear interpolation between two values: `start + (end - start) * tickDelta`. */
-    lerp(start: number, end: number, tickDelta: number): number;
-
-    /** Whether a world position projects to a visible on-screen location. */
-    isOnScreen(worldX: number, worldY: number, worldZ: number, tickDelta: number): boolean;
-    /** Whether any part of an entity's bounding box projects to visible screen coordinates. */
-    isEntityOnScreen(entity: Entity, tickDelta: number): boolean;
-}
-
-declare const esp: EspProxy;
-
-// ---------------------------------------------------------------------------
-// renderer — RendererProxy
-// ---------------------------------------------------------------------------
-
-/** Fonts registered with the renderer. Custom fonts are not supported — only these three. */
-type OpalFontName = "productsans-bold" | "productsans-medium" | "materialicons-regular";
-
-interface RendererProxy {
-    // -- Basic shapes -----------------------------------------------------------------
-
-    rect(x: number, y: number, width: number, height: number, color: number): void;
-    roundedRect(x: number, y: number, width: number, height: number, radius: number, color: number): void;
-    circle(cx: number, cy: number, radius: number, color: number): void;
-
-    // -- Gradients --------------------------------------------------------------------
-
-    rectGradient(x: number, y: number, width: number, height: number, color1: number, color2: number, angleDegrees: number): void;
-    roundedRectGradient(
-        x: number, y: number, width: number, height: number, radius: number,
-        color1: number, color2: number, angleDegrees: number,
-    ): void;
-
-    // -- Per-corner radii ---------------------------------------------------------------
-
-    roundedRectVarying(
-        x: number, y: number, width: number, height: number,
-        radiusTopLeft: number, radiusTopRight: number, radiusBottomRight: number, radiusBottomLeft: number,
-        color: number,
-    ): void;
-    roundedRectVaryingGradient(
-        x: number, y: number, width: number, height: number,
-        radiusTopLeft: number, radiusTopRight: number, radiusBottomRight: number, radiusBottomLeft: number,
-        color1: number, color2: number, angleDegrees: number,
-    ): void;
-
-    // -- Outlines & strokes ---------------------------------------------------------------
-
-    rectOutline(x: number, y: number, width: number, height: number, thickness: number, color: number): void;
-    roundedRectOutline(x: number, y: number, width: number, height: number, radius: number, thickness: number, color: number): void;
-    roundedRectOutlineVarying(
-        x: number, y: number, width: number, height: number,
-        radiusTopLeft: number, radiusTopRight: number, radiusBottomRight: number, radiusBottomLeft: number,
-        thickness: number, color: number,
-    ): void;
-    rectStroke(x: number, y: number, width: number, height: number, strokeThickness: number, color: number, strokeColor: number): void;
-    rectOutlineStroke(
-        x: number, y: number, width: number, height: number,
-        outlineThickness: number, strokeThickness: number, outlineColor: number, strokeColor: number,
-    ): void;
-
-    // -- Special shapes -----------------------------------------------------------------
-
-    /** Rectangle filled with an animated rainbow gradient. */
-    rainbowRect(x: number, y: number, width: number, height: number): void;
-
-    // -- Composite effects --------------------------------------------------------------
-
-    /** Soft box shadow behind a rounded-rectangle footprint. */
-    shadow(
-        x: number, y: number, width: number, height: number, radius: number,
-        blur: number, offsetX: number, offsetY: number, color: number,
-    ): void;
-    /** Frosted-glass fill: the blurred backdrop captured behind the UI. */
-    blurFill(x: number, y: number, width: number, height: number, radius: number): void;
-    blurFillVarying(
-        x: number, y: number, width: number, height: number,
-        radiusTopLeft: number, radiusTopRight: number, radiusBottomRight: number, radiusBottomLeft: number,
-    ): void;
-    /** Fills with the glow (bloom) pass texture, producing a soft glow around bright content. */
-    glowFill(x: number, y: number, width: number, height: number, radius: number): void;
-    /**
-     * Inner glow along the inside edges of a rounded rectangle.
-     * **Experimental** — advanced and visually unverified; no native Opal UI callers yet.
-     */
-    innerGlow(x: number, y: number, width: number, height: number, radius: number, spread: number, color: number): void;
-
-    // -- Images ---------------------------------------------------------------------------
-
-    /**
-     * Loads an image from the client's resource path and returns a handle.
-     * Never `null` — a failed load yields a handle whose `isValid()` is
-     * `false` rather than throwing, so check that before drawing. Cached:
-     * repeat calls with the same path are cheap.
-     */
-    loadImage(path: string): ScriptImage;
-    /** Draws a loaded image within the given bounds with optional corner rounding. */
-    image(handle: ScriptImage, x: number, y: number, width: number, height: number, radius: number): void;
-    /** Draws a loaded image multiplied by a tint color (recoloring icons, fading). */
-    imageTinted(handle: ScriptImage, x: number, y: number, width: number, height: number, radius: number, tint: number): void;
-    /** Releases a GPU image previously obtained from `loadImage`. */
-    destroyImage(handle: ScriptImage): void;
-
-    // -- Path API ---------------------------------------------------------------------------
-
-    /** Begins a new custom path; subsequent moveTo/lineTo/quadTo/cubicTo calls build it. */
-    beginPath(): void;
-    moveTo(x: number, y: number): void;
-    lineTo(x: number, y: number): void;
-    /** Quadratic bézier curve through control point (cx, cy) to (x, y). */
-    quadTo(cx: number, cy: number, x: number, y: number): void;
-    /** Cubic bézier curve through control points (c1x, c1y) and (c2x, c2y) to (x, y). */
-    cubicTo(c1x: number, c1y: number, c2x: number, c2y: number, x: number, y: number): void;
-    /** Sets the stroke color used by the next `stroke()` call. */
-    strokeColor(color: number): void;
-    /** Sets the stroke width used by the next `stroke()` call. */
-    strokeWidth(width: number): void;
-    /** Strokes the current path using the active stroke color and width. */
-    stroke(): void;
-    /** Closes the current path, connecting its last point back to its first. */
-    closePath(): void;
-
-    // -- Text rendering ---------------------------------------------------------------------
-
-    /** Draws a line of text and returns its advance width. */
-    text(fontName: OpalFontName | string, text: string, x: number, y: number, size: number, color: number): number;
-    /** Draws a line of text with a drop shadow and returns its advance width. */
-    textShadow(fontName: OpalFontName | string, text: string, x: number, y: number, size: number, color: number): number;
-    /** Draws a line of text filled with a horizontal two-color gradient. */
-    textGradient(fontName: OpalFontName | string, text: string, x: number, y: number, size: number, color1: number, color2: number): void;
-    /** Measures the rendered width of a string without drawing it. */
-    textWidth(fontName: OpalFontName | string, text: string, size: number): number;
-    /** Measures the rendered height of a string without drawing it. */
-    textHeight(fontName: OpalFontName | string, text: string, size: number): number;
-    /** Wraps a string into lines that each fit within the given width. */
-    wrapText(fontName: OpalFontName | string, text: string, width: number, size: number): ScriptList<string>;
-    /** Trims a string to fit within the given width, appending an ellipsis if truncated. */
-    trimText(fontName: OpalFontName | string, text: string, width: number, size: number): string;
-
-    // -- Transforms -------------------------------------------------------------------------
-
-    /** Runs `content` under a uniform scale transform pivoted at the center of the given rectangle. */
-    scale(factor: number, x: number, y: number, width: number, height: number, content: () => void): void;
-    /** Runs `content` with the origin translated to the rectangle's center and rotated by `degrees`. */
-    rotate(degrees: number, x: number, y: number, width: number, height: number, content: () => void): void;
-    /** Pushes a scissor/clip region, runs `content`, then pops it. */
-    scissor(x: number, y: number, width: number, height: number, content: () => void): void;
-    /** Sets the global alpha multiplier applied to all subsequent draws this frame. */
-    globalAlpha(alpha: number): void;
-
-    // -- Color helpers ----------------------------------------------------------------------
-
-    /** Packs r/g/b/a (0-255 each) into an ARGB integer. Prefer this over raw 0xAARRGGBB literals. */
-    color(r: number, g: number, b: number, a: number): number;
-    /** Packs r/g/b (0-255 each) into a fully opaque ARGB integer (alpha 255). */
-    color(r: number, g: number, b: number): number;
-    /** Replaces the alpha channel of an ARGB color, preserving its RGB channels. */
-    withAlpha(color: number, alpha: number): number;
-    /** Scales the alpha of an ARGB color by an opacity factor (0.0-1.0). */
-    applyOpacity(color: number, opacity: number): number;
-    /** Linearly interpolates between two ARGB colors (0.0 = color1, 1.0 = color2). */
-    interpolate(color1: number, color2: number, factor: number): number;
-    /** Darkens an ARGB color by the given factor. */
-    darker(color: number, factor: number): number;
-    /** Brightens an ARGB color by the given factor. */
-    brighter(color: number, factor: number): number;
-}
-
-declare const renderer: RendererProxy;
-
-// ---------------------------------------------------------------------------
-// palette — PaletteProxy (command-palette views)
-// ---------------------------------------------------------------------------
-
-interface OpalPaletteFooterHint {
-    key: string;
-    label: string;
-}
-
-interface OpalPaletteViewConfig {
-    /** Unique view id. Passed to `openView` / `removeView`. */
-    id: string;
-    /** Draws one frame into the content rectangle. `dt` is wall-clock seconds since the last frame. */
-    render(x: number, y: number, w: number, h: number, dt: number): void;
-    /** Display title shown in the palette list (searchable). Defaults to `id`. */
-    title?: string;
-    /** Sub-text shown beside the title. Defaults to "Script view". */
-    description?: string;
-    /** Placeholder text shown in the search row while the view is open. */
-    placeholder?: string;
-    /** Footer key hints, e.g. `[{ key: "Space", label: "Start" }]`. */
-    footer?: OpalPaletteFooterHint[];
-    /** Handles a key press. Return true to consume. Esc always closes the view before reaching here. */
-    keyPressed?(keyCode: number, mods: number): boolean;
-    /** Handles a typed character. Return true to consume. */
-    charTyped?(codepoint: number): boolean;
-    /** Handles a click in content-local coordinates. Return true to consume. */
-    mouseClicked?(localX: number, localY: number, button: number): boolean;
-}
-
-interface PaletteProxy {
-    /**
-     * Creates and registers a custom palette view. Requires at least
-     * `{ id, render }`. Returns the view id, or null if the config was invalid.
-     */
-    createView(config: OpalPaletteViewConfig): string | null;
-    /** Opens the command palette directly into a previously registered view. */
-    openView(id: string): void;
-    /** Unregisters a previously registered view. */
-    removeView(id: string): void;
-}
-
-declare const palette: PaletteProxy;
-
-// ---------------------------------------------------------------------------
-// keys — GLFW key code constants (for palette view keyPressed handlers)
-// ---------------------------------------------------------------------------
-
-interface OpalKeys {
-    UP: number;
-    DOWN: number;
-    LEFT: number;
-    RIGHT: number;
-    SPACE: number;
-    ENTER: number;
-    ESCAPE: number;
-    TAB: number;
-    BACKSPACE: number;
-    LEFT_SHIFT: number;
-    LEFT_CONTROL: number;
-    A: number; B: number; C: number; D: number; E: number; F: number; G: number; H: number;
-    I: number; J: number; K: number; L: number; M: number; N: number; O: number; P: number;
-    Q: number; R: number; S: number; T: number; U: number; V: number; W: number; X: number;
-    Y: number; Z: number;
-    NUM_0: number; NUM_1: number; NUM_2: number; NUM_3: number; NUM_4: number;
-    NUM_5: number; NUM_6: number; NUM_7: number; NUM_8: number; NUM_9: number;
-    F1: number; F2: number; F3: number; F4: number; F5: number; F6: number;
-    F7: number; F8: number; F9: number; F10: number; F11: number; F12: number;
-    /** Left mouse button. */
-    MOUSE_0: number;
-    /** Right mouse button. */
-    MOUSE_1: number;
-    /** Middle mouse button. */
-    MOUSE_2: number;
-    MOUSE_3: number;
-    MOUSE_4: number;
-    /** The "no bind" sentinel — what `module.getBind()` returns when unbound. */
-    NONE: number;
-}
-
-declare const keys: OpalKeys;
-
-// ---------------------------------------------------------------------------
-// timer — stopwatch helper
-// ---------------------------------------------------------------------------
-
-/** Stopwatch handle returned by `timer.create()`. Tracks elapsed time since
- * the last `reset()` (or since creation, if never reset). */
-interface OpalStopwatch {
-    /** Resets the elapsed-time baseline to now. */
-    reset(): void;
-    /** Milliseconds elapsed since the last `reset()` (or creation). */
-    elapsed(): number;
-    /** Whether at least `ms` milliseconds have elapsed since the last reset. */
-    passed(ms: number): boolean;
-    /** `passed(ms)`, and if true, also resets the baseline — the common
-     * "has enough time gone by? if so, restart the clock" rate-limit check. */
-    passedAndReset(ms: number): boolean;
-}
-
-interface OpalTimer {
-    /** Creates a new stopwatch, its baseline starting at the moment of creation. */
-    create(): OpalStopwatch;
-    /** Current engine time in milliseconds — a raw timestamp, not tied to any stopwatch. */
-    now(): number;
-}
-
-declare const timer: OpalTimer;
-
-// ---------------------------------------------------------------------------
-// Bound Java interop types (see world/types.mdx)
-// ---------------------------------------------------------------------------
-
-/** Yaw/pitch pair. Construct with `new Vec2f(yaw, pitch)`. */
-declare class Vec2f {
-    constructor(yaw: number, pitch: number);
-    getYaw(): number;
-    getPitch(): number;
-    toString(): string;
-}
-
-/**
- * Integer block position, backed by the `ScriptBlockPos` wrapper. Construct
- * with `new BlockPos(x, y, z)`.
- */
-declare class BlockPos {
-    constructor(x: number, y: number, z: number);
-    getX(): number;
-    getY(): number;
-    getZ(): number;
-    /** Returns a new BlockPos shifted one block in the given direction. */
-    offset(direction: Direction): BlockPos;
-    toString(): string;
-}
-
-/**
- * A cardinal or vertical facing direction. Scripts do not construct this
- * directly — obtain one from `world.getAdjacentDirections(pos)`.
- */
-interface Direction {
-    getOpposite(): Direction;
-    getName(): "north" | "south" | "east" | "west" | "up" | "down";
-    toString(): string;
-}
-
-/**
- * A validated rotation paired with the hit result needed for block/entity
- * interaction. Returned by `rotation.getRotationFromRaycastedBlock()` and
- * `rotation.getRotationFromRaycastedEntity()` — may be null.
- */
-interface RaytracedRotation {
-    getYaw(): number;
-    getPitch(): number;
-    /** Pass to `mc.interactionManager.interactBlock()`. */
-    getHitResult(): HitResult;
-    toString(): string;
-}
+/* ============================================================================
+ * Script wrapper types
+ *
+ * Everything the API hands a script is one of these: a primitive, a String, a
+ * `Script*` wrapper exposing getters, or an explicitly opaque token. Nothing
+ * else is reachable. Under `HostAccess.EXPLICIT` a raw Java or Minecraft
+ * object exports no members at all — a property read on one is silently
+ * `undefined` and a method call throws `Unknown identifier` — so every inert
+ * return type is wrapped in host code before it crosses into script land.
+ *
+ * Two conventions run through the whole surface:
+ *   • `-1` / `-1.0` is the sentinel for "absent or not applicable" (e.g. a
+ *     living-only read against a non-living entity). Not `null`, not `0`.
+ *   • Amplifier is 0-based (raw Minecraft), level is 1-based (what a nameplate
+ *     shows): Strength II is amplifier 1, level 2.
+ * ========================================================================== */
 
 /**
  * A world-space double vector — the `ScriptVec3` wrapper. Returned by
@@ -1262,10 +82,9 @@ interface RaytracedRotation {
  *
  * Bound as `Vec3d`, so `new Vec3d(x, y, z)` constructs one. (The global used
  * to be the raw Mojang `Vec3` class, which was neither constructible nor
- * readable from a script — `HostAccess.EXPLICIT` exports nothing on it.)
+ * readable from a script.)
  */
-declare class Vec3d {
-    constructor(x: number, y: number, z: number);
+interface Vec3d {
     getX(): number;
     getY(): number;
     getZ(): number;
@@ -1276,48 +95,183 @@ declare class Vec3d {
     subtract(other: Vec3d): Vec3d;
     toString(): string;
 }
+declare const Vec3d: {
+    /** Constructs a new world-space double vector. */
+    new (x: number, y: number, z: number): Vec3d;
+};
 
 /**
- * Raw `net.minecraft.util.Mth` math utility, bound as `MathHelper`.
+ * A yaw/pitch rotation pair. Bound as `Vec2f`, backed by the `ScriptVec2f`
+ * wrapper around `net.minecraft.world.phys.Vec2`.
+ */
+interface Vec2f {
+    /** Yaw angle (horizontal rotation) in degrees. */
+    getYaw(): number;
+    /** Pitch angle (vertical rotation) in degrees. */
+    getPitch(): number;
+    toString(): string;
+}
+declare const Vec2f: {
+    new (yaw: number, pitch: number): Vec2f;
+};
+
+/**
+ * An integer block position. Bound as `BlockPos`, backed by the
+ * `ScriptBlockPos` wrapper around `net.minecraft.core.BlockPos`. Returned by
+ * proxies such as `player.getBlockPosition()`.
+ */
+interface BlockPos {
+    getX(): number;
+    getY(): number;
+    getZ(): number;
+    /** Returns a new BlockPos shifted one block in the given direction. */
+    offset(direction: Direction): BlockPos;
+    toString(): string;
+}
+declare const BlockPos: {
+    new (x: number, y: number, z: number): BlockPos;
+};
+
+/** Lowercase cardinal/vertical direction name returned by `Direction.getName()`. */
+type DirectionName = "north" | "south" | "east" | "west" | "up" | "down";
+
+/**
+ * A cardinal or vertical facing direction. Backed by the `ScriptDirection`
+ * wrapper around `net.minecraft.core.Direction`. Scripts do not construct
+ * this directly — obtain one from `world.getAdjacentDirections(pos)`.
+ */
+interface Direction {
+    /** The direction opposite to this one (e.g. NORTH to SOUTH, UP to DOWN). */
+    getOpposite(): Direction;
+    /** Lowercase direction name. */
+    getName(): DirectionName;
+    toString(): string;
+}
+
+/**
+ * A validated rotation paired with the hit result needed for block or entity
+ * interaction. Backed by `ScriptRaytracedRotation`. Returned by
+ * `rotation.getRotationFromRaycastedBlock()` and
+ * `rotation.getRotationFromRaycastedEntity()`. May be `null` when no valid
+ * rotation reaches the target — always null-check the result.
+ */
+interface RaytracedRotation {
+    /** Yaw angle in degrees to aim at the target. */
+    getYaw(): number;
+    /** Pitch angle in degrees to aim at the target. */
+    getPitch(): number;
+    /** Raw hit result — pass to `mc.interactionManager.interactBlock()`. */
+    getHitResult(): HitResult;
+    toString(): string;
+}
+
+/**
+ * `net.minecraft.util.Mth`, bound as `MathHelper`.
  *
  * **Unusable — do not reach for it.** It is bound as the raw Mojang class,
  * which carries no `@HostAccess.Export`, so every call on it is denied at
- * runtime. Use `esp.lerp(start, end, tickDelta)` for interpolation, or
- * JavaScript's built-in `Math` for general math.
+ * runtime. Typed as `unknown` so the IDE refuses to autocomplete a method that
+ * cannot work. For interpolation use `esp.lerp(start, end, tickDelta)`; for
+ * general math use JavaScript's built-in `Math`.
  */
-declare const MathHelper: Record<string, never>;
+declare const MathHelper: unknown;
 
 /**
- * Standard `java.awt.Color`. The one JDK type scripts can touch directly: its
- * two constructors and `getRGB()` are explicitly allow-listed by the
- * host-access policy, which is why they work where `MathHelper`'s do not. An
- * alternative to `renderer.color(r, g, b, a)` for building packed ARGB ints.
+ * The standard `java.awt.Color`, bound as `Color`. The one JDK type scripts
+ * can touch directly: its two constructors and `getRGB()` are explicitly
+ * allow-listed by the host-access policy, which is why they work where
+ * `MathHelper`'s do not. An alternative to `renderer.color(r, g, b, a)` for
+ * building packed ARGB integers.
  */
-declare class Color {
-    constructor(r: number, g: number, b: number, a?: number);
-    /** Packed ARGB integer, suitable for any renderer color parameter. */
+interface JavaColor {
+    /** Packed ARGB integer for this color, suitable for any renderer color parameter. */
     getRGB(): number;
 }
+declare const Color: {
+    new (r: number, g: number, b: number, a?: number): JavaColor;
+};
 
-/** `net.minecraft.world.InteractionHand` enum constant. */
-interface InteractionHand {}
+/** `net.minecraft.world.InteractionHand` constant — pass to hand parameters. */
+interface InteractionHand {
+    readonly __opalInteractionHandBrand?: never;
+}
 /** The player's main hand. */
 declare const MAIN_HAND: InteractionHand;
 /** The player's off hand. */
 declare const OFF_HAND: InteractionHand;
 
-// ---------------------------------------------------------------------------
-// Script wrapper types
-//
-// Everything the API hands a script is one of these: a primitive, a String, a
-// Script* wrapper exposing getters, or an explicitly opaque token. Nothing
-// else is reachable — HostAccess.EXPLICIT grants no member access on
-// un-annotated types, no bean-property mapping, and no container access, and
-// it fails silently (a property read on a raw object is `undefined`, never an
-// error). So: getters never properties, a `ScriptList` reads as a read-only
-// array while a raw `java.util.List` stays inert, and an opaque brand means
-// genuinely no readable members.
-// ---------------------------------------------------------------------------
+/**
+ * A screen-space rectangle — the `ScriptBox2D` wrapper. Returned by
+ * `esp.getEntityBox2D()`.
+ *
+ * The components are laid out `(x, y, width, height)`, **not** four corners.
+ * Both spellings of the same rectangle are exported: the raw component names
+ * (`getZ()` is the width, `getW()` the height) and the readable ones.
+ */
+interface Box2D {
+    /** Left edge (screen X). */
+    getX(): number;
+    /** Top edge (screen Y). */
+    getY(): number;
+    /** The width, under its raw component name. Same as `getWidth()`. */
+    getZ(): number;
+    /** The height, under its raw component name. Same as `getHeight()`. */
+    getW(): number;
+    /** Left edge — the readable spelling of `getX()`. */
+    getX1(): number;
+    /** Top edge — the readable spelling of `getY()`. */
+    getY1(): number;
+    /** Right edge (`x + width`). */
+    getX2(): number;
+    /** Bottom edge (`y + height`). */
+    getY2(): number;
+    getWidth(): number;
+    getHeight(): number;
+    toString(): string;
+}
+
+/**
+ * A world-space axis-aligned bounding box — the `ScriptBox3D` wrapper.
+ * Returned by `player.getBoundingBox()`.
+ */
+interface Box3D {
+    getMinX(): number;
+    getMinY(): number;
+    getMinZ(): number;
+    getMaxX(): number;
+    getMaxY(): number;
+    getMaxZ(): number;
+    getWidth(): number;
+    getHeight(): number;
+    getDepth(): number;
+    toString(): string;
+}
+
+/**
+ * One active status effect — the `ScriptEffect` wrapper. Obtain from
+ * `player.getEffects()`/`getEffect(name)` or the entity equivalents.
+ */
+interface Effect {
+    /** Namespaced registry id, e.g. `"minecraft:strength"`. */
+    getId(): string;
+    /** Localised display name, e.g. `"Strength"`. */
+    getName(): string;
+    /** **0-based** amplifier, as Minecraft stores it: Strength II is `1`. */
+    getAmplifier(): number;
+    /** **1-based** level, as a nameplate shows it: Strength II is `2`. */
+    getLevel(): number;
+    /** Remaining duration in ticks (20 per second). */
+    getDuration(): number;
+    /** Remaining duration in whole seconds. */
+    getDurationSeconds(): number;
+    /** Whether this effect has no expiry (a beacon/command effect). */
+    isInfinite(): boolean;
+    /** Whether this effect came from a beacon or conduit rather than a potion. */
+    isAmbient(): boolean;
+    /** Packed ARGB color of the effect's particles. */
+    getColor(): ARGBColor;
+    toString(): string;
+}
 
 /**
  * An entity — the `ScriptEntity` wrapper. What `world.getEntities()`,
@@ -1325,8 +279,8 @@ declare const OFF_HAND: InteractionHand;
  * `AttackEvent.getTarget()` hand a script.
  *
  * `getName()` returns a plain `string`. It used to return a Minecraft
- * `Component`, forcing an `entity.getName().getString()` idiom — that is gone,
- * and `.getString()` on the result will now fail.
+ * `Component`, which forced an `entity.getName().getString()` idiom — that is
+ * gone, and `.getString()` on the result will now fail.
  *
  * The living-only reads (`getHealth`, `getMaxHealth`, `getAbsorption`,
  * `getArmor`) answer `-1` on a non-living entity — gate on `>= 0`, since `0`
@@ -1335,7 +289,9 @@ declare const OFF_HAND: InteractionHand;
 interface Entity {
     /** Localised display name, as plain text. */
     getName(): string;
+    /** Numeric entity id for this session. */
     getId(): number;
+    /** Stable UUID string. */
     getUuid(): string;
     isAlive(): boolean;
     /** Whether this entity is living (a mob or a player) and so has health. */
@@ -1368,33 +324,8 @@ interface Entity {
 type LivingEntity = Entity;
 
 /**
- * One active status effect — the `ScriptEffect` wrapper. Obtain from
- * `player.getEffects()`/`getEffect(name)` or the entity equivalents.
- */
-interface Effect {
-    /** Namespaced registry id, e.g. `"minecraft:strength"`. */
-    getId(): string;
-    /** Localised display name, e.g. `"Strength"`. */
-    getName(): string;
-    /** **0-based** amplifier, as Minecraft stores it: Strength II is `1`. */
-    getAmplifier(): number;
-    /** **1-based** level, as a nameplate shows it: Strength II is `2`. */
-    getLevel(): number;
-    /** Remaining duration in ticks (20 per second). */
-    getDuration(): number;
-    /** Remaining duration in whole seconds. */
-    getDurationSeconds(): number;
-    isInfinite(): boolean;
-    /** Whether this effect came from a beacon or conduit rather than a potion. */
-    isAmbient(): boolean;
-    /** Packed ARGB color of the effect's particles. */
-    getColor(): number;
-    toString(): string;
-}
-
-/**
- * An item stack — the `ScriptItemStack` wrapper, from `inventory.getStack()` /
- * `getMainHandStack()` / `getOffHandStack()`.
+ * An item stack — the `ScriptItemStack` wrapper. Returned by
+ * `inventory.getStack()` / `getMainHandStack()` / `getOffHandStack()`.
  */
 interface ItemStack {
     isEmpty(): boolean;
@@ -1403,78 +334,87 @@ interface ItemStack {
     getName(): string;
     /** Namespaced registry id, e.g. `"minecraft:diamond_pickaxe"`. */
     getId(): string;
+    /** Whether this item takes durability damage at all. */
     isDamageable(): boolean;
     /** Durability used so far. `0` when not damageable. */
     getDamage(): number;
     /** Total durability. `0` when not damageable. */
     getMaxDamage(): number;
+    /** Whether this stack is a placeable block. */
     isBlock(): boolean;
-    toString(): string;
-}
-
-/**
- * A world-space axis-aligned bounding box — the `ScriptBox3D` wrapper, from
- * `player.getBoundingBox()`.
- */
-interface Box3D {
-    getMinX(): number;
-    getMinY(): number;
-    getMinZ(): number;
-    getMaxX(): number;
-    getMaxY(): number;
-    getMaxZ(): number;
-    getWidth(): number;
-    getHeight(): number;
-    getDepth(): number;
-    toString(): string;
-}
-
-/**
- * A screen-space rectangle — the `ScriptBox2D` wrapper, from
- * `esp.getEntityBox2D()`.
- *
- * The components are laid out `(x, y, width, height)`, **not** four corners.
- * Both spellings are exported: the raw component names (`getZ()` is the width,
- * `getW()` the height) and the readable ones.
- */
-interface Box2D {
-    /** Left edge (screen X). */
-    getX(): number;
-    /** Top edge (screen Y). */
-    getY(): number;
-    /** The width, under its raw component name. Same as `getWidth()`. */
-    getZ(): number;
-    /** The height, under its raw component name. Same as `getHeight()`. */
-    getW(): number;
-    /** Left edge — the readable spelling of `getX()`. */
-    getX1(): number;
-    /** Top edge — the readable spelling of `getY()`. */
-    getY1(): number;
-    /** Right edge (`x + width`). */
-    getX2(): number;
-    /** Bottom edge (`y + height`). */
-    getY2(): number;
-    getWidth(): number;
-    getHeight(): number;
     toString(): string;
 }
 
 /**
  * An opaque pass-back token from `RaytracedRotation.getHitResult()`.
  *
- * **Deliberately memberless.** A script can read nothing off it and does not
- * need to: its only legitimate use is being handed straight to
- * `mc.interactionManager.interactBlock()`.
+ * **Deliberately memberless.** A script cannot read anything off it, and does
+ * not need to: its only legitimate use is being handed straight to
+ * `mc.interactionManager.interactBlock()`. That is a valid use of an inert
+ * type, not an oversight — do not expect properties on it.
  */
-interface HitResult {}
+interface HitResult {
+    readonly __opalHitResultBrand?: never;
+}
+
+/**
+ * An opaque token from `mc.getWorld()`.
+ *
+ * **Deliberately memberless.** Comparing against `null` needs no member
+ * access, so `mc.getWorld() === null` correctly answers "is the world loaded"
+ * — which is the only thing this value is for. Every actual world query is
+ * flattened onto the `world` global; use that.
+ */
+interface ClientLevel {
+    readonly __opalClientLevelBrand?: never;
+}
+
+/**
+ * A container as seen from script code — the `ScriptList` wrapper.
+ *
+ * **A read-only array.** It reports a `length`, answers index access
+ * (`list[0]`), iterates under `for..of`, and works with spread (`[...list]`)
+ * and `Array.from(list)`. The `size()`/`isEmpty()`/`get(i)` methods stay for
+ * back-compat and read the same, with `get(i)` bounds-safe where a raw `[i]`
+ * past the end is `undefined`. Two limits: it is read-only, so `list[0] = x`
+ * and `push` are refused; and the `Array.prototype` helpers (`map`, `filter`,
+ * `reduce`) are not on it — spread into a real array first, `[...list].map(...)`.
+ *
+ * ```js
+ * const entities = world.getLivingEntitiesInRange(16);
+ * for (const entity of entities) {
+ *     // ...
+ * }
+ * ```
+ */
+interface ScriptList<T> {
+    readonly length: number;
+    readonly [index: number]: T;
+    /** Bounds-safe: an out-of-range index returns `null` rather than throwing. */
+    get(index: number): T | null;
+    size(): number;
+    isEmpty(): boolean;
+    [Symbol.iterator](): IterableIterator<T>;
+}
+
+/**
+ * Packed 32-bit ARGB color integer. **Always build these with
+ * `renderer.color(r, g, b[, a])` / `Color` / `withAlpha` / `interpolate`
+ * rather than a raw `0xAARRGGBB` literal** — JavaScript numbers are a single
+ * 64-bit `double`, and a hex literal with alpha `>= 0x80` is larger than
+ * `2^31`; narrowing it to a Java `int` truncates to the wrong value.
+ */
+type ARGBColor = number;
 
 /**
  * A loaded image — the `ScriptImage` wrapper, from `renderer.loadImage()`.
+ * Pass it to `renderer.image()` / `imageTinted()` / `destroyImage()`.
  *
  * `loadImage` always returns a handle, never `null`: check `isValid()` before
  * drawing, since a failed load yields an invalid handle rather than an error.
  */
 interface ScriptImage {
+    /** Whether this handle refers to a successfully loaded image. */
     isValid(): boolean;
     /** Pixel width, or `0` when invalid. */
     getWidth(): number;
@@ -1515,30 +455,1169 @@ interface ScriptCriteria {
     toString(): string;
 }
 
+/** Registered font names accepted by every `renderer` text method. Bare
+ * string literals from other font packs are still accepted at runtime. */
+type FontName = "productsans-bold" | "productsans-medium" | "materialicons-regular" | (string & {});
+
+/* ============================================================================
+ * keys — GLFW key codes (palette-view key handlers; see ui/palette.mdx)
+ * ========================================================================== */
+
 /**
- * A container as seen from script code — the `ScriptList` wrapper.
+ * GLFW key codes as plain integer fields, since scripts cannot reference
+ * `org.lwjgl.*` classes directly. Values match the codes the command palette
+ * delivers to `keyPressed(keyCode, mods)`, and are what `module.setBind()`
+ * expects.
+ */
+interface KeysGlobal {
+    UP: number;
+    DOWN: number;
+    LEFT: number;
+    RIGHT: number;
+    SPACE: number;
+    ENTER: number;
+    ESCAPE: number;
+    TAB: number;
+    BACKSPACE: number;
+    LEFT_SHIFT: number;
+    LEFT_CONTROL: number;
+    A: number; B: number; C: number; D: number; E: number; F: number; G: number;
+    H: number; I: number; J: number; K: number; L: number; M: number; N: number;
+    O: number; P: number; Q: number; R: number; S: number; T: number; U: number;
+    V: number; W: number; X: number; Y: number; Z: number;
+    NUM_0: number; NUM_1: number; NUM_2: number; NUM_3: number; NUM_4: number;
+    NUM_5: number; NUM_6: number; NUM_7: number; NUM_8: number; NUM_9: number;
+    F1: number; F2: number; F3: number; F4: number; F5: number; F6: number;
+    F7: number; F8: number; F9: number; F10: number; F11: number; F12: number;
+    /** Left mouse button. */
+    MOUSE_0: number;
+    /** Right mouse button. */
+    MOUSE_1: number;
+    /** Middle mouse button. */
+    MOUSE_2: number;
+    MOUSE_3: number;
+    MOUSE_4: number;
+    /** The "no bind" sentinel — what `getBind()` returns when unbound. */
+    NONE: number;
+}
+declare const keys: KeysGlobal;
+
+/* ============================================================================
+ * timer — stopwatch helper (reference/core.mdx "Timer Proxy")
+ * ========================================================================== */
+
+/** Stopwatch handle returned by `timer.create()`. Tracks elapsed time since
+ * the last `reset()` (or since creation, if never reset). */
+interface Stopwatch {
+    /** Resets the elapsed-time baseline to now. */
+    reset(): void;
+    /** Milliseconds elapsed since the last `reset()` (or creation). */
+    elapsed(): number;
+    /** Whether at least `ms` milliseconds have elapsed since the last reset. */
+    passed(ms: number): boolean;
+    /** `passed(ms)`, and if true, also resets the baseline — the common
+     * "has enough time gone by? if so, restart the clock" rate-limit check. */
+    passedAndReset(ms: number): boolean;
+}
+
+interface TimerProxy {
+    /** Creates a new stopwatch, its baseline starting at the moment of creation. */
+    create(): Stopwatch;
+    /** Current engine time in milliseconds — a raw timestamp, not tied to any stopwatch. */
+    now(): number;
+}
+declare const timer: TimerProxy;
+
+/* ============================================================================
+ * Events (events.mdx) — payload objects passed to module.on(name, handler)
+ * ========================================================================== */
+
+/** Base shape shared by every cancellable event. Calling `cancel()` on a
+ * non-cancellable event throws, since the method does not exist on that
+ * payload — only call it on events documented as cancellable. Every
+ * cancellable payload in this file extends this interface; there is no
+ * separate accessor shape to worry about. */
+interface CancellableEvent {
+    /** Whether the event has already been cancelled by another handler. */
+    isCancelled(): boolean;
+    /** Cancels the event. Cannot be un-set once called. */
+    cancel(): void;
+}
+
+/** `enable/disable` lifecycle events receive no argument at all. */
+type NoPayload = undefined;
+
+/** Fired at the start of a tick, before vanilla tick logic runs. Carries no data. */
+interface PreGameTickEvent {}
+/** Fired at the end of a tick, after vanilla tick logic has run. Carries no data. */
+interface PostGameTickEvent {}
+
+/**
+ * The `renderScreen` payload, wrapping the runtime `ScriptRenderScreenEvent`.
+ * Fired during the 2D HUD pass, the one render pass that also carries the
+ * cursor position. Draw through the `renderer` global; it already targets the
+ * frame's canvas.
+ */
+interface ScriptRenderScreenEvent {
+    /** Fractional progress through the current tick, in `[0, 1)`. Matches `client.getTickDelta()` for this frame; use it to interpolate motion. */
+    getPartialTicks(): number;
+    /** Cursor x in GUI-scaled coordinates. */
+    getMouseX(): number;
+    /** Cursor y in GUI-scaled coordinates. */
+    getMouseY(): number;
+    toString(): string;
+}
+
+/**
+ * The payload for the two tick-only render passes, `renderWorld` and
+ * `renderBloom`, wrapping the runtime `ScriptRenderEvent`. It carries the
+ * partial tick but no cursor position, which belongs to the screen pass. Use
+ * `esp.*` for world-space projection under `renderWorld`; shapes drawn under
+ * `renderBloom` feed the glow pass instead of showing directly.
+ */
+interface ScriptRenderEvent {
+    /** Fractional progress through the current tick, in `[0, 1)`. Interpolate positions against it for a smooth trail. */
+    getPartialTicks(): number;
+    toString(): string;
+}
+
+/** `preMove` / `postMove` payload. Cancellable only on `preMove`. */
+interface PreMoveEvent extends CancellableEvent {
+    /** Movement speed for the step. */
+    getSpeed(): number;
+    /** X component of the directional movement input for the step. */
+    getInputX(): number;
+    /** Y component of the directional movement input for the step. */
+    getInputY(): number;
+    /** Z component of the directional movement input for the step. */
+    getInputZ(): number;
+}
+/** `postMove` — read-only subset describing the movement that was just applied. Not cancellable. */
+interface PostMoveEvent {
+    getSpeed(): number;
+    getInputX(): number;
+    getInputY(): number;
+    getInputZ(): number;
+}
+
+/** `preMovementPacket` — before the movement packet is sent. Getters read the
+ * values about to be sent; setters rewrite them before the packet leaves
+ * (server-side position/rotation spoofing). Cancellable. */
+interface PreMovementPacketEvent extends CancellableEvent {
+    getX(): number;
+    getY(): number;
+    getZ(): number;
+    setX(x: number): void;
+    setY(y: number): void;
+    setZ(z: number): void;
+    getYaw(): number;
+    getPitch(): number;
+    setYaw(yaw: number): void;
+    setPitch(pitch: number): void;
+    isOnGround(): boolean;
+    setOnGround(onGround: boolean): void;
+    isSprinting(): boolean;
+    setSprinting(sprinting: boolean): void;
+    isHorizontalCollision(): boolean;
+    setHorizontalCollision(horizontalCollision: boolean): void;
+    /** Whether the packet is sent even when no movement occurred. */
+    isForceInput(): boolean;
+    /** Forces the packet to be sent even when no movement occurred. */
+    setForceInput(forceInput: boolean): void;
+}
+
+/** `postMovementPacket` — read-only subset describing what was actually sent.
+ * No setters, not cancellable. */
+interface PostMovementPacketEvent {
+    getX(): number;
+    getY(): number;
+    getZ(): number;
+    getYaw(): number;
+    getPitch(): number;
+    isOnGround(): boolean;
+    isSprinting(): boolean;
+}
+
+/** Shared payload for all four packet events — cancelling drops the packet
+ * so vanilla never sends/handles it. */
+interface PacketEvent extends CancellableEvent {
+    /** Simple class name of the wrapped packet, e.g. `"ServerboundMovePlayerPacket"`. */
+    getType(): string;
+}
+/** A packet is about to be sent to the server. Cancellable. */
+interface SendPacketEvent extends PacketEvent {}
+/** A packet is received from the server, before it is handled. Cancellable. */
+interface ReceivePacketEvent extends PacketEvent {}
+/** An outbound packet is sent immediately on the network thread. Cancellable. */
+interface InstantaneousSendPacketEvent extends PacketEvent {}
+/** An inbound packet is received on the network thread, before main-thread queueing. Cancellable. */
+interface InstantaneousReceivePacketEvent extends PacketEvent {}
+
+/** `attack` — the player attacks an entity, before the interaction is processed. Not cancellable. */
+interface AttackEvent {
+    /** The entity being attacked. The flattened getters below are shortcuts for its reads. */
+    getTarget(): Entity;
+    /** Display name of the entity being attacked. */
+    getTargetName(): string;
+    /** Entity id of the target. */
+    getTargetId(): number;
+    /** Target's current health, or `-1` if the target is not a living entity. */
+    getTargetHealth(): number;
+    /** Target's maximum health, or `-1` if the target is not a living entity. */
+    getTargetMaxHealth(): number;
+    /** Distance to the target, or `-1` if unavailable. */
+    getTargetDistance(): number;
+}
+
+/** `swing` — the player swings an arm. Not cancellable. */
+interface SwingEvent {
+    /** Whether the main hand (as opposed to the off hand) is swinging. */
+    isMainHand(): boolean;
+}
+
+/** `itemUse` — the player uses (right-clicks) the held item. Carries no data. Not cancellable. */
+interface ItemUseEvent {}
+
+/** `jump` — before the jump impulse is applied. Cancellable. */
+interface JumpEvent extends CancellableEvent {
+    /** Whether the player is sprinting while jumping. */
+    isSprinting(): boolean;
+    /** Overrides whether the jump is treated as a sprint jump, changing the forward boost applied. */
+    setSprinting(sprinting: boolean): void;
+}
+
+/** `joinWorld` — the local player joins a world, after the client world is initialised. Carries no data. */
+interface JoinWorldEvent {}
+
+/** `blockUpdate` — a loaded block changes state. Not cancellable. */
+interface BlockUpdateEvent {
+    /** X coordinate where the block change occurred. */
+    getX(): number;
+    /** Y coordinate where the block change occurred. */
+    getY(): number;
+    /** Z coordinate where the block change occurred. */
+    getZ(): number;
+    /** Display name of the block before the update (e.g. "Air", "Stone"). */
+    getOldBlock(): string;
+    /** Display name of the block after the update (e.g. "Air", "Stone"). */
+    getNewBlock(): string;
+}
+
+/** `serverConnect` — before connecting to a multiplayer server. Cancel to abort the connection. */
+interface ServerConnectEvent extends CancellableEvent {
+    /** Hostname or IP of the server being connected to. */
+    getHost(): string;
+    /** Port of the server being connected to. */
+    getPort(): number;
+    /** Combined `host:port` address of the server being connected to. */
+    getAddress(): string;
+}
+
+/** `serverDisconnect` — the client disconnects from a server. Carries no data. */
+interface ServerDisconnectEvent {}
+
+/** `chatReceived` — a chat message is received from the server, before it is shown. Cancellable. */
+interface ChatReceivedEvent extends CancellableEvent {
+    /** The received chat message as plain text. */
+    getMessage(): string;
+    /** Whether the message is an action-bar overlay message rather than a chat-line message. */
+    isOverlay(): boolean;
+    /** Reroutes the message to (true) or away from (false) the action bar. */
+    setOverlay(overlay: boolean): void;
+}
+
+/** Shared shape of `keyPress` / `mousePress` — both expose the GLFW code through the same accessor. */
+interface InteractionCodeEvent {
+    /** GLFW key code (keyPress) or mouse button code (mousePress) that triggered the event. */
+    getCode(): number;
+}
+/** `keyPress` — a keyboard key is pressed. Not cancellable. */
+interface KeyPressEvent extends InteractionCodeEvent {}
+/** `mousePress` — a mouse button is pressed. Not cancellable. */
+interface MousePressEvent extends InteractionCodeEvent {}
+
+/** `resolutionChange` — the GUI is resized (framebuffer resolution changed). Carries no data. Not cancellable. */
+interface ResolutionChangeEvent {}
+
+/* ============================================================================
+ * registerScript / registerModule (intro.mdx, events.mdx, settings.mdx)
+ * ========================================================================== */
+
+interface ScriptMetadata {
+    /** Script display name. */
+    name: string;
+    /** Semantic version string, e.g. "1.0.0". Max 16 characters when published. */
+    version: string;
+    /** Author name(s) shown on the public Scripts page. */
+    authors: string[];
+}
+
+interface ModuleMetadata {
+    /** Module display name — appears in the ClickGUI alongside native modules. */
+    name: string;
+    /** Short description of what the module does. */
+    description: string;
+}
+
+/**
+ * The event-name -> handler map for `module.on(...)`. `enable`/`disable`
+ * receive no argument; every other event receives its documented payload
+ * object. There is one handler slot per event name per module — calling
+ * `on` again with the same name replaces the previous handler.
+ */
+interface ScriptModuleEvents {
+    enable: () => void;
+    disable: () => void;
+    preGameTick: (event: PreGameTickEvent) => void;
+    postGameTick: (event: PostGameTickEvent) => void;
+    renderScreen: (event: ScriptRenderScreenEvent) => void;
+    renderWorld: (event: ScriptRenderEvent) => void;
+    renderBloom: (event: ScriptRenderEvent) => void;
+    preMove: (event: PreMoveEvent) => void;
+    postMove: (event: PostMoveEvent) => void;
+    preMovementPacket: (event: PreMovementPacketEvent) => void;
+    postMovementPacket: (event: PostMovementPacketEvent) => void;
+    sendPacket: (event: SendPacketEvent) => void;
+    receivePacket: (event: ReceivePacketEvent) => void;
+    instantaneousSendPacket: (event: InstantaneousSendPacketEvent) => void;
+    instantaneousReceivePacket: (event: InstantaneousReceivePacketEvent) => void;
+    attack: (event: AttackEvent) => void;
+    swing: (event: SwingEvent) => void;
+    itemUse: (event: ItemUseEvent) => void;
+    jump: (event: JumpEvent) => void;
+    joinWorld: (event: JoinWorldEvent) => void;
+    blockUpdate: (event: BlockUpdateEvent) => void;
+    serverConnect: (event: ServerConnectEvent) => void;
+    serverDisconnect: (event: ServerDisconnectEvent) => void;
+    chatReceived: (event: ChatReceivedEvent) => void;
+    keyPress: (event: KeyPressEvent) => void;
+    mousePress: (event: MousePressEvent) => void;
+    resolutionChange: (event: ResolutionChangeEvent) => void;
+}
+
+/**
+ * The `module` object passed into a `registerModule` callback. Exposes the
+ * event registration API (`on`) plus the settings API (`addBool`,
+ * `addNumber`, `addMode`, `addGroup`, and their `get`/`set` counterparts).
+ * All settings must be defined synchronously inside the callback, before
+ * any `module.on(...)` calls — they are finalized once the callback returns.
+ */
+interface ScriptModule {
+    /**
+     * Registers a callback for a named event. The callback receives the
+     * event object as its only argument (lifecycle events receive nothing).
+     * Calling `on` again with the same event name replaces the previous
+     * handler rather than stacking.
+     */
+    on<K extends keyof ScriptModuleEvents>(event: K, handler: ScriptModuleEvents[K]): void;
+    /** Escape hatch for an event name not covered by `ScriptModuleEvents`. */
+    on(event: string, handler: (event: any) => void): void;
+
+    /** Adds a boolean (toggle) setting. Appears as a switch in the ClickGUI. */
+    addBool(name: string, defaultValue: boolean): void;
+    /** Adds a numeric (slider) setting. Appears as a slider in the ClickGUI. */
+    addNumber(name: string, defaultValue: number, min: number, max: number, step: number): void;
+    /** Adds a mode (dropdown) setting. `options` is a plain JS string array; the first option is the default. */
+    addMode(name: string, options: string[]): void;
+    /**
+     * Groups one or more previously defined settings under a collapsible
+     * header. Call this AFTER the settings it references — names that
+     * don't match an already-added setting are ignored, and if none match,
+     * the group is not created.
+     */
+    addGroup(name: string, settingNames: string[]): void;
+
+    /** Current value of a boolean setting, or `false` if it doesn't exist. */
+    getBool(name: string): boolean;
+    /** Sets a boolean setting's value. No-ops if the setting doesn't exist. */
+    setBool(name: string, value: boolean): void;
+    /** Current value of a numeric setting, or `0.0` if it doesn't exist. */
+    getNumber(name: string): number;
+    /** Sets a numeric setting's value. No-ops if the setting doesn't exist. */
+    setNumber(name: string, value: number): void;
+    /** Currently selected option of a mode setting, or `""` if it doesn't exist. */
+    getMode(name: string): string;
+    /** Whether a mode setting currently equals `option` (case-insensitive). There is no `setMode` — mode settings are read-only from script code. */
+    isModeEqual(name: string, option: string): boolean;
+
+    /**
+     * Binds this module to a key, so it toggles without a trip through the
+     * binds menu. Pass a `keys.*` code — `module.setBind(keys.F7)`. A user's
+     * own rebind wins over this and survives a `.script reload`, so calling
+     * this at registration sets a *default*, not a lock.
+     */
+    setBind(code: number): void;
+    /** The module's current bind code, or `keys.NONE` when unbound. */
+    getBind(): number;
+    /** Removes the module's bind, leaving it toggleable only from the ClickGUI. */
+    clearBind(): void;
+}
+
+/** Handle returned by `registerScript()`, used to register one or more modules. */
+interface ScriptHandle {
+    /**
+     * Registers a module (feature toggle) that appears in the ClickGUI
+     * alongside native modules, with its own settings and event handlers.
+     */
+    registerModule(config: ModuleMetadata, callback: (module: ScriptModule) => void): void;
+}
+
+/**
+ * Every script entry point must register itself with `registerScript`. This
+ * is the only true top-level global function — everything else scripts do
+ * happens through the returned handle or the ambient proxy globals below.
+ */
+declare function registerScript(metadata: ScriptMetadata): ScriptHandle;
+
+/* ============================================================================
+ * client — core/client (reference/core.mdx "Client Proxy")
+ * ========================================================================== */
+
+
+interface ClientProxy {
+    /** Prints a message to the local chat only. Calls `toString()` on the object. */
+    print(o: unknown): void;
+    /** Prints a success-styled (green) message to the local chat. */
+    success(message: string): void;
+    /** Prints an error-styled (red) message to the local chat. */
+    error(message: string): void;
+
+    /** Whether a specific module is currently enabled. */
+    isModuleEnabled(id: string): boolean;
+    /** Toggles a module on or off. */
+    setModuleEnabled(id: string, enabled: boolean): void;
+
+    /** Sends a chat message to the server, exactly as if typed in the chat box. */
+    sendChat(message: string): void;
+    /** Runs a client command. The leading `/` is optional — `"toggle Fly"` and `"/toggle Fly"` both work. */
+    runCommand(command: string): void;
+
+    /** Compiles a reusable chat-line matcher. `${name}` placeholders capture; every other character matches literally. Compile once and reuse the handle across chat events. */
+    criteria(pattern: string): ScriptCriteria;
+
+    /** Width of the game window in scaled virtual pixels (affected by GUI scale). */
+    getScaledWidth(): number;
+    /** Height of the game window in scaled virtual pixels. */
+    getScaledHeight(): number;
+    /** Current GUI scale factor (e.g. 1.0, 2.0). */
+    getScaleFactor(): number;
+    /** Raw physical width of the window in pixels. */
+    getFramebufferWidth(): number;
+    /** Raw physical height of the window in pixels. */
+    getFramebufferHeight(): number;
+
+    /** Primary color of the active client theme as an ARGB integer. */
+    getThemePrimary(): ARGBColor;
+    /** Secondary color of the active client theme as an ARGB integer. */
+    getThemeSecondary(): ARGBColor;
+    /**
+     * Interpolates between the primary and secondary theme colors in a
+     * pulsing animation. Use `offset` to create gradients/waves across
+     * multiple elements.
+     */
+    getAnimatedThemeColor(speed: number, offset: number): ARGBColor;
+
+    /** Partial tick time (0.0 to 1.0) for smooth rendering interpolation between ticks. */
+    getTickDelta(): number;
+    /** Current frames per second. */
+    getFPS(): number;
+}
+declare const client: ClientProxy;
+
+/* ============================================================================
+ * storage — per-script persistent key/value store (reference/core.mdx)
+ * ========================================================================== */
+
+/**
+ * A small persistent string-to-string store, scoped to the script and durable
+ * across `.script reload`, world changes, and client restarts. Every mutation
+ * is flushed to disk atomically, so a crash mid-write can never tear a value:
+ * a later read sees either the whole previous value or the whole new one,
+ * never a partial one.
  *
- * **A read-only array.** It reports a `length`, answers index access
- * (`list[0]`), iterates under `for..of`, and works with spread (`[...list]`)
- * and `Array.from(list)`. The `size()`/`isEmpty()`/`get(i)` methods stay for
- * back-compat and read the same, with `get(i)` bounds-safe where a raw `[i]`
- * past the end is `undefined`. Two limits: it is read-only, so `list[0] = x`
- * and `push` are refused; and the `Array.prototype` helpers (`map`, `filter`,
- * `reduce`) are not on it — spread into a real array first, `[...list].map(...)`.
+ * Everything is a `string` — serialize with `JSON.stringify` on the way in and
+ * `JSON.parse` on the way out. A missing key reads back as `null` (never
+ * `undefined`), so `storage.get(key) === null` is the "not set" test.
+ *
+ * The store is **capped**, and a mutation that would breach a cap **throws**
+ * rather than silently dropping data — catch it, or check sizes first:
+ *   • at most **32 keys**;
+ *   • each key at most **64 characters**;
+ *   • each value at most **8 KB** of UTF-8;
+ *   • **64 KB** of UTF-8 total across every key and value.
  *
  * ```js
- * const entities = world.getLivingEntitiesInRange(16);
- * for (const entity of entities) {
- *     // ...
- * }
+ * storage.set("highscore", JSON.stringify({ score: 4200, round: 12 }));
+ * const raw = storage.get("highscore");
+ * const best = raw === null ? null : JSON.parse(raw);
  * ```
  */
-interface ScriptList<T> {
-    readonly length: number;
-    readonly [index: number]: T;
-    /** Bounds-safe: an out-of-range index returns `null` rather than throwing. */
-    get(index: number): T | null;
-    size(): number;
-    isEmpty(): boolean;
-    [Symbol.iterator](): IterableIterator<T>;
+interface StorageProxy {
+    /**
+     * Stores `value` under `key`, flushing to disk atomically. Overwrites any
+     * existing value. **Throws** if the write would exceed the key-count,
+     * key-length, per-value, or total-size cap (see {@link StorageProxy}).
+     */
+    set(key: string, value: string): void;
+    /** The value stored under `key`, or `null` if the key is not set. */
+    get(key: string): string | null;
+    /**
+     * Deletes `key`, flushing to disk atomically. Returns `true` if a value
+     * was removed, `false` if the key was not set.
+     */
+    remove(key: string): boolean;
+    /** Every key currently in the store, as a `ScriptList<string>`. */
+    keys(): ScriptList<string>;
 }
+declare const storage: StorageProxy;
+
+/* ============================================================================
+ * notification — core/notifications (reference/core.mdx "Notification Proxy")
+ * ========================================================================== */
+
+interface NotificationProxy {
+    /** Displays a green success toast notification. `duration` is in ms (default 3000). */
+    success(title: string, description: string, duration?: number): void;
+    /** Displays a red error toast notification. */
+    error(title: string, description: string, duration?: number): void;
+    /** Displays a yellow warning toast notification. */
+    warn(title: string, description: string, duration?: number): void;
+    /** Displays a blue informational toast notification. */
+    info(title: string, description: string, duration?: number): void;
+    /** Displays a notification with a dynamic type string. */
+    show(type: "SUCCESS" | "ERROR" | "WARN" | "INFO", title: string, description: string, duration?: number): void;
+}
+declare const notification: NotificationProxy;
+
+/* ============================================================================
+ * overlay — core/overlay (reference/core.mdx "Overlay Proxy")
+ * ========================================================================== */
+
+interface IslandConfig {
+    /** Island content width. */
+    width: number;
+    /** Island content height. */
+    height: number;
+    /** Render priority — higher renders on top. */
+    priority: number;
+    /** Draws one frame of the island's content. */
+    render(posX: number, posY: number, width: number, height: number, progress: number): void;
+}
+
+interface OverlayProxy {
+    /** Creates a new Dynamic Island and returns its unique ID. */
+    createIsland(config: IslandConfig): string;
+    /** Activates the island, adding it to the render loop. */
+    showIsland(islandId: string): void;
+    /** Deactivates the island without destroying it. */
+    hideIsland(islandId: string): void;
+    /** Permanently deletes the island. */
+    destroyIsland(islandId: string): void;
+    /** Updates the content width dynamically. */
+    setIslandWidth(islandId: string, width: number): void;
+    /** Updates the height dynamically. */
+    setIslandHeight(islandId: string, height: number): void;
+    /** Updates the render priority (higher renders on top). */
+    setIslandPriority(islandId: string, priority: number): void;
+}
+declare const overlay: OverlayProxy;
+
+/* ============================================================================
+ * modules — core/modules.mdx
+ * ========================================================================== */
+
+/** Module category, accepted case-insensitively by `listCategory`. */
+type ModuleCategory = "Combat" | "Movement" | "Visual" | "World" | "Utility" | "Scripts" | (string & {});
+
+interface ModulesProxy {
+    /** Whether a module with the given name is registered. */
+    exists(id: string): boolean;
+    /** Whether a module is currently enabled. `false` if it doesn't exist. */
+    isEnabled(id: string): boolean;
+    /** Enables or disables a module by name. No-ops silently if not found. */
+    setEnabled(id: string, enabled: boolean): void;
+    /** Toggles a module on or off by name. No-ops silently if not found. */
+    toggle(id: string): void;
+
+    /** Category name of a module (e.g. 'Combat', 'Movement'), or `null` if not found. */
+    getCategory(id: string): string | null;
+    /** Arraylist suffix of a module (often the current mode), or `null`. */
+    getSuffix(id: string): string | null;
+    /** Whether a module is visible in the arraylist/HUD. */
+    isVisible(id: string): boolean;
+    /** Sets whether a module should be visible in the arraylist/HUD. */
+    setVisible(id: string, visible: boolean): void;
+
+    /** Display names of all registered modules, both native and script-defined, as a `ScriptList<string>`. */
+    listAll(): ScriptList<string>;
+    /** Display names of all modules in the given category, as a `ScriptList<string>`. */
+    listCategory(category: ModuleCategory): ScriptList<string>;
+    /** Display names of all currently enabled modules, as a `ScriptList<string>`. */
+    listEnabled(): ScriptList<string>;
+}
+declare const modules: ModulesProxy;
+
+/* ============================================================================
+ * mc — MinecraftProxy (reference/mc.mdx, reference/core.mdx)
+ * ========================================================================== */
+
+/**
+ * Handles block interactions, entity attacks, and block breaking. Every
+ * method is null-guarded internally, so it is safe to call before the
+ * world or player are ready.
+ */
+interface InteractionManagerProxy {
+    /** Right-clicks a block face. `hitResult` comes from `RaytracedRotation.getHitResult()`. */
+    interactBlock(hand: InteractionHand, hitResult: HitResult): void;
+    /** Begins or updates block-breaking progress on the given face. Returns whether progress was updated. */
+    updateBlockBreakingProgress(blockPos: BlockPos, direction: Direction): boolean;
+    /** Cancels any in-progress block breaking. */
+    cancelBlockBreaking(): void;
+    /** Whether a block break is currently in progress. */
+    isBreakingBlock(): boolean;
+    /** Attacks an entity with the local player's main hand. */
+    attackEntity(entity: Entity): void;
+    /** Uses the item in the given hand (right-click use, not on a block). */
+    interactItem(hand: InteractionHand): void;
+    /** Stops using an item (e.g. releasing a bow or stopping eating). */
+    stopUsingItem(): void;
+}
+
+/**
+ * A safe, structured facade over the Minecraft client.
+ *
+ * **There is no `mc.player` or `mc.world`.** GraalVM JS does no bean-property
+ * mapping under `HostAccess.EXPLICIT`, so only the getter form resolves — the
+ * property form reads `undefined`, which makes `mc.player === null` a guard
+ * that never fires. The idiomatic guard at the top of an event callback is:
+ *
+ * ```js
+ * if (mc.getPlayer() === null || mc.getWorld() === null) return;
+ * ```
+ *
+ * For actual player/world behaviour use the dedicated `player` / `world` /
+ * `inventory` proxy globals.
+ */
+interface MinecraftProxy {
+    /** Block/entity interaction proxy. */
+    readonly interactionManager: InteractionManagerProxy;
+
+    /**
+     * The local player as a `ScriptEntity`, or `null` if not yet loaded.
+     * Good for a null guard, and readable for name/health/position — but for
+     * local-player state and movement prefer the richer `player` global.
+     */
+    getPlayer(): Entity | null;
+    /**
+     * The active client world, or `null` if not yet loaded. **Null-guard use
+     * only** — the returned value is an opaque token with no readable members.
+     * Every real world query lives on the `world` global.
+     */
+    getWorld(): ClientLevel | null;
+    /** Method form of the `interactionManager` field. Prefer the field directly. */
+    getInteractionManager(): InteractionManagerProxy;
+}
+declare const mc: MinecraftProxy;
+
+/* ============================================================================
+ * player — character/player.mdx
+ * ========================================================================== */
+
+/**
+ * Local player state: position, rotation, health, combat utilities, and
+ * basic actions. Every method here reads the local player, which does not
+ * exist on the main menu, during world loads, or between disconnects — guard
+ * every handler with `if (mc.getPlayer() === null) return;` before use.
+ * (`mc.player` is not a thing; see `MinecraftProxy`.)
+ */
+interface PlayerProxy {
+    /** Player's eye position in world space — the origin point for raycasts and rotation calculations. */
+    getEyePosition(): Vec3d;
+    /** Alias of `getEyePosition()` — despite the name, this is also the eye position, not the feet. */
+    getPosition(): Vec3d;
+    /** Floored block coordinates the player is standing in, with readable `getX/getY/getZ`. */
+    getBlockPosition(): BlockPos;
+    /** Current per-tick velocity (delta movement) vector. */
+    getVelocity(): Vec3d;
+    /** Player's axis-aligned bounding box. */
+    getBoundingBox(): Box3D;
+    /** Eye height above feet, in blocks. */
+    getStandingEyeHeight(): number;
+
+    /** Current yaw (horizontal) rotation in degrees. */
+    getYaw(): number;
+    /** Current pitch (vertical) rotation in degrees. */
+    getPitch(): number;
+    /** Distance fallen since last touching ground, in blocks. */
+    getFallDistance(): number;
+
+    /** Whether the player is currently on the ground. */
+    isOnGround(): boolean;
+    /** Whether the player is currently airborne. */
+    isInAir(): boolean;
+    /** Ticks spent in the air continuously. */
+    getAirTicks(): number;
+    /** Ticks spent on the ground continuously. */
+    getGroundTicks(): number;
+    /** Whether the player is sneaking (shift held). */
+    isSneaking(): boolean;
+    /** Whether the player is sprinting. */
+    isSprinting(): boolean;
+    /** Whether the player is using an item (eating, blocking, drawing a bow, etc.). */
+    isUsingItem(): boolean;
+
+    /** Current health points. */
+    getHealth(): number;
+    /** Maximum health points. */
+    getMaxHealth(): number;
+    /** Absorption (golden hearts) amount. */
+    getAbsorption(): number;
+    /** Armor points (0-20) from the currently worn armor. */
+    getArmor(): number;
+
+    /**
+     * Whether the player currently has the named effect. Matched on the
+     * effect's display name, case-insensitively — `hasEffect("strength")`.
+     */
+    hasEffect(name: string): boolean;
+    /** The named active effect, or `null` if the player does not have it. */
+    getEffect(name: string): Effect | null;
+    /** Every effect currently active on the player, as a `ScriptList<Effect>`. */
+    getEffects(): ScriptList<Effect>;
+
+    /** Whether the next attack would land a critical hit (falling, not on ground, not in water, etc.). */
+    canCrit(): boolean;
+    /** Attack damage of the item currently held in the main hand. */
+    getAttackDamage(): number;
+    /** Maximum distance, in blocks, at which the player can attack/interact with entities. */
+    getEntityInteractionRange(): number;
+    /** Whether the main-hand item is a weapon (sword, axe, or pickaxe). */
+    isHoldingWeapon(): boolean;
+
+    /** Distance (bounding-box edge to edge) to a living entity, or `-1.0` for a non-living entity. */
+    getDistanceToEntity(entity: Entity): number;
+    /** Closest point on a living entity's bounding box to the player's eye — the point KillAura aims at. `null` for a non-living entity. */
+    getClosestPoint(entity: Entity): Vec3d | null;
+    /** Whether the player's box, shifted by the given offset, is free of collidable blocks. */
+    isBoxEmpty(offsetX: number, offsetY: number, offsetZ: number): boolean;
+    /** Whether the space directly below the player (at the given Y offset, typically negative) is empty. */
+    isBoxEmptyBelow(offsetY: number): boolean;
+
+    /** Plays the hand swing animation for the given hand. */
+    swingHand(hand: InteractionHand): void;
+    /** Right-clicks (uses) the item in the given hand and plays the swing animation. */
+    useItem(hand: InteractionHand): void;
+}
+declare const player: PlayerProxy;
+
+/* ============================================================================
+ * movement — character/movement.mdx
+ * ========================================================================== */
+
+interface MovementProxy {
+    /** Current horizontal speed in blocks per second. Roughly `getSpeed() * 20`. */
+    getBlocksPerSecond(): number;
+    /** Current horizontal speed as a raw velocity magnitude, in blocks per tick. */
+    getSpeed(): number;
+    /** Whether the player is currently providing movement input (WASD or equivalent). Reflects input keys, not actual velocity. */
+    isMoving(): boolean;
+
+    /** Sets horizontal speed using the current movement input direction. */
+    setSpeed(speed: number): void;
+    /**
+     * Sets horizontal speed with either a strafe blend (0.0 forward .. 1.0
+     * strafe) or a specific yaw in degrees — these are two distinct
+     * documented overloads that collapse to the same call site because
+     * JavaScript has only one number type. Test both behaviors in-game
+     * before shipping a script that relies on this.
+     */
+    setSpeed(speed: number, strafePercentageOrYaw: number): void;
+    /** Sets the velocity of an arbitrary entity along a given yaw direction. */
+    setEntitySpeed(entity: Entity, speed: number, yaw: number): void;
+    /** Applies the player's Swiftness potion-effect bonus to a base speed (optionally with a custom per-level multiplier). */
+    getSwiftnessSpeed(speed: number, swiftnessMultiplier?: number): number;
+
+    /**
+     * Current movement yaw based on WASD input and camera rotation.
+     *
+     * There is a two-argument `getMoveYaw(from, to)` overload on the host
+     * proxy, but it is **not callable from a script**: its parameters are JOML
+     * `Vector2d`s, and no global binds that class, so there is no way to build
+     * an argument for it. It is deliberately not typed here.
+     */
+    getMoveYaw(): number;
+    /** Current movement direction in degrees (or for a specific yaw, if given), accounting for strafe/forward input. */
+    getDirectionDegrees(yaw?: number): number;
+    /** Current movement direction in radians (or for a specific yaw, if given). */
+    getDirectionRadians(yaw?: number): number;
+    /** Calculates the exact movement direction from raw input values. Returns radians. */
+    getDirection(rotationYaw: number, moveForward: number, moveStrafing: number): number;
+    /** X/Z offsets for a given yaw direction and distance. A two-element `ScriptList`, not a tuple: `get(0)` is the X delta, `get(1)` the Z delta. */
+    yawPos(yaw: number, value: number): ScriptList<number>;
+}
+declare const movement: MovementProxy;
+
+/* ============================================================================
+ * rotation — character/rotation.mdx
+ * ========================================================================== */
+
+interface RotationProxy {
+    /** Submits a target rotation using an instant (snap) model, applied on the next movement packet with automatic movement correction. */
+    set(yaw: number, pitch: number): void;
+    /** Submits a target rotation using a linear (smooth) model, capped to `speed` degrees per tick. Resubmit every tick (e.g. from `preGameTick`) rather than once. */
+    setSmooth(yaw: number, pitch: number, speed: number): void;
+
+    /** Yaw/pitch needed to look at a world position from the player's current eye position. */
+    getRotationFromPosition(pos: Vec3d): Vec2f;
+    /** Yaw/pitch needed to look at the center of a specific block face. */
+    getRotationFromBlock(blockPos: BlockPos, direction: Direction): Vec2f;
+    /**
+     * Raytraced rotation to a block face, validating that it would hit the
+     * intended face within reach (the method Scaffold uses for placement).
+     * Returns `null` if no valid rotation exists.
+     */
+    getRotationFromRaycastedBlock(blockPos: BlockPos, side: Direction, priorityRotations: Vec2f, playerPos: Vec3d): RaytracedRotation | null;
+    /**
+     * Raytraced rotation to a living entity, validating a hit within range
+     * (the method KillAura uses). Returns `null` if no valid rotation exists.
+     */
+    getRotationFromRaycastedEntity(entity: Entity, closestVector: Vec3d, entityInteractionRange: number): RaytracedRotation | null;
+    /** Unit look vector for the given pitch/yaw. */
+    getRotationVector(pitch: number, yaw: number): Vec3d;
+
+    /** Current server-side rotation as managed by the rotation handler. */
+    getRotation(): Vec2f;
+    /** Total angular difference between two rotations, accounting for wrapping. */
+    getRotationDifference(a: Vec2f, b: Vec2f): number;
+    /** Raw cursor delta needed to achieve a rotation delta, accounting for Minecraft's sensitivity multiplier. */
+    getCursorDelta(rotationDelta: number, sensitivityMultiplier: number): number;
+    /** Patches a rotation to avoid constant-delta detection by applying small natural-looking jitter. */
+    patchConstantRotation(rotation: Vec2f, prevRotation: Vec2f): Vec2f;
+    /** Snaps a rotation value to the nearest one achievable by Minecraft's mouse sensitivity system. */
+    getSensitivityModifiedRotation(original: number): number;
+    /** Sent (server-side) rotation after sensitivity correction. */
+    getSentRotation(original: Vec2f): Vec2f;
+    /** Applies Minecraft's sensitivity curve to both axes of a rotation. */
+    getSensitivityModifiedRotationVec(original: Vec2f): Vec2f;
+    /** Converts a rotation to vanilla Minecraft mouse-look coordinates. */
+    getVanillaRotation(original: Vec2f): Vec2f;
+    /** Wraps a rotation value toward a target to avoid duplicate-angle detection. */
+    getDuplicateWrapped(value: number, target: number): number;
+
+    /** Angular offset between the player's look direction and the direction to an entity. */
+    getEntityFOV(entity: Entity): number;
+    /** Whether an entity falls within a field-of-view cone centered on the player's look direction (`fov` = half-angle in degrees, 180 = full sphere). */
+    isEntityInFOV(entity: Entity, fov: number): boolean;
+}
+declare const rotation: RotationProxy;
+
+/* ============================================================================
+ * inventory — character/inventory.mdx
+ * ========================================================================== */
+
+/**
+ * Hotbar slot switching (with silent/spoof variants), item searching, and
+ * stack inspection. Hotbar slots are `0`–`8`; the full inventory is `0`–`35`
+ * (hotbar `0`–`8`, main inventory `9`–`35`). All methods read the local player
+ * without a null guard — confirm it exists first with
+ * `if (mc.getPlayer() === null) return;`.
+ */
+interface InventoryProxy {
+    /** Switches the selected hotbar slot normally — visible to client and server. */
+    setSlot(slot: number): void;
+    /** Switches the slot in default silent mode: server sees the change, client held-item render may be preserved. */
+    setSlotSilent(slot: number): void;
+    /** Switches the slot in full silent mode: fully spoofed — server sees the change, client keeps rendering the original item. */
+    setSlotFullSilent(slot: number): void;
+    /** Sends a raw selected-slot update packet for the given slot, forcing a switch for a single action within one tick. */
+    sendSlotPacket(slot: number): void;
+    /** Currently selected hotbar slot index (0-8). */
+    getSelectedSlot(): number;
+
+    /** Searches the hotbar (0-8) for a valid placeable block. Returns `-1` if none found. */
+    findBlock(): number;
+    /** Searches the hotbar (0-8) for an item whose display name contains `itemName` (case-insensitive). Returns `-1` if not found. */
+    findItem(itemName: string): number;
+    /** Searches the full inventory (0-35) for an item by display-name substring (case-insensitive). Returns `-1` if not found. */
+    findItemInInventory(itemName: string): number;
+    /** Searches the hotbar (0-8) for an item by its stable registry id (`"diamond"` or `"minecraft:diamond"`). The id-keyed counterpart to `findItem`, correct for logic where display names are locale-dependent. Returns `-1` if not found. */
+    findItemById(id: string): number;
+
+    /** Item stack in the given hotbar slot. */
+    getStack(slot: number): ItemStack | null;
+    /** Main-hand item stack, resolved through the slot system (accounts for silent switching). */
+    getMainHandStack(): ItemStack | null;
+    /** Off-hand item stack. */
+    getOffHandStack(): ItemStack | null;
+    /** Whether the main-hand item is a placeable block. */
+    isHeldItemBlock(): boolean;
+    /** Whether the item in the given slot is a placeable block. */
+    isBlock(slot: number): boolean;
+    /** Display name of the item in the given slot, or `""` if empty. */
+    getItemName(slot: number): string;
+    /** Stack count of the item in the given slot. */
+    getItemCount(slot: number): number;
+    /** Total count of a specific item across the whole inventory (display-name substring, case-insensitive). */
+    countItem(itemName: string): number;
+    /** Total count of an item across the whole inventory (0-35) by its stable registry id (`"diamond"` or `"minecraft:diamond"`). The id-keyed counterpart to `countItem`. */
+    countItemById(id: string): number;
+    /** Total placeable blocks across the hotbar and off hand. */
+    countBlocks(): number;
+}
+declare const inventory: InventoryProxy;
+
+/* ============================================================================
+ * world — world proxy (reference/world.mdx; world/world.mdx not yet split out)
+ * ========================================================================== */
+
+interface WorldProxy {
+    /** Whether the block at the given position is air. */
+    isAir(pos: BlockPos): boolean;
+    /** Whether the block can be replaced (air, fluid, grass, etc.). */
+    isReplaceable(pos: BlockPos): boolean;
+    /** Whether the block is solid. */
+    isSolid(pos: BlockPos): boolean;
+    /** Localized display name of the block. */
+    getBlockName(pos: BlockPos): string;
+    /** Breaking hardness; `-1` means unbreakable (bedrock). */
+    getBlockHardness(pos: BlockPos): number;
+
+    /** Whether any face-adjacent block is solid (placeable-against). */
+    hasAdjacentBlock(pos: BlockPos): boolean;
+    /** Directions where a solid neighbour exists. Can be empty. */
+    getAdjacentDirections(pos: BlockPos): ScriptList<Direction>;
+
+    /** All entities in the world. */
+    getEntities(): ScriptList<Entity>;
+    /** Living entities (mobs + players) within `radius` of the player, excluding self. */
+    getLivingEntitiesInRange(radius: number): ScriptList<Entity>;
+
+    /** World time in ticks. */
+    getTime(): number;
+    /** Time of day: 0 = sunrise, 6000 = noon, 12000 = sunset, 18000 = midnight. */
+    getTimeOfDay(): number;
+    /** Dimension identifier, e.g. `'minecraft:overworld'`. */
+    getDimension(): string;
+}
+declare const world: WorldProxy;
+
+/* ============================================================================
+ * esp — world/esp.mdx
+ * ========================================================================== */
+
+/**
+ * 3D-to-2D screen projection for custom ESP overlays, used from
+ * `renderScreen` (or `renderWorld` for world-space work). Projection
+ * methods return `null` when the target is off-screen or behind the
+ * camera — always null-check before drawing. Pass `client.getTickDelta()`
+ * as `tickDelta` to every method for smooth inter-tick interpolation.
+ */
+interface EspProxy {
+    /** Projects an entity's full 3D bounding box onto the screen, returning the enclosing 2D rectangle. `null` if behind camera or fully off-viewport. */
+    getEntityBox2D(entity: Entity, tickDelta: number): Box2D | null;
+    /** Projects a single 3D world position onto the 2D screen. Check `result.z < 1.0` — `>= 1.0` means behind the camera. */
+    project(worldX: number, worldY: number, worldZ: number, tickDelta: number): Vec3d | null;
+    /** Convenience wrapper around `project()` for a `Vec3d` position. */
+    projectVec(pos: Vec3d, tickDelta: number): Vec3d | null;
+
+    /** Smoothly interpolated, camera-relative entity position between the previous and current tick. `null` for non-`LivingEntity` targets. */
+    getInterpolatedPosition(entity: Entity, tickDelta: number): Vec3d | null;
+    /** Linear interpolation: `start + (end - start) * tickDelta`. */
+    lerp(start: number, end: number, tickDelta: number): number;
+
+    /** Whether a world position projects to a visible on-screen location (in front of the camera and inside the viewport). */
+    isOnScreen(worldX: number, worldY: number, worldZ: number, tickDelta: number): boolean;
+    /** Whether any part of an entity's bounding box projects to visible screen coordinates. Equivalent to `getEntityBox2D` returning non-null. */
+    isEntityOnScreen(entity: Entity, tickDelta: number): boolean;
+}
+declare const esp: EspProxy;
+
+/* ============================================================================
+ * renderer — ui/renderer.mdx
+ * ========================================================================== */
+
+/** A rendering callback bracketed by a transform's save/restore — draws made
+ * inside run under that transform only. */
+type RenderContent = () => void;
+
+/**
+ * A complete 2D drawing API backed by the client's 2D canvas. Every draw
+ * call must run inside an active canvas frame: a module's `renderScreen`
+ * callback, a command-palette view's `render`, or a Dynamic Island's
+ * `render` callback. Outside an active frame, image draws are silently
+ * skipped. Colors are packed ARGB integers — build them with
+ * `renderer.color(r, g, b[, a])`, never a raw `0xAARRGGBB` literal.
+ */
+interface RendererProxy {
+    /** Draws a filled rectangle. */
+    rect(x: number, y: number, width: number, height: number, color: ARGBColor): void;
+    /** Draws a filled rectangle with uniformly rounded corners. */
+    roundedRect(x: number, y: number, width: number, height: number, radius: number, color: ARGBColor): void;
+    /** Draws a filled circle. */
+    circle(cx: number, cy: number, radius: number, color: ARGBColor): void;
+
+    /** Draws a rectangle filled with a linear two-color gradient. `angleDegrees` sets the gradient direction. */
+    rectGradient(x: number, y: number, width: number, height: number, color1: ARGBColor, color2: ARGBColor, angleDegrees: number): void;
+    /** Draws a rounded rectangle filled with a linear two-color gradient. */
+    roundedRectGradient(x: number, y: number, width: number, height: number, radius: number, color1: ARGBColor, color2: ARGBColor, angleDegrees: number): void;
+
+    /** Draws a filled rectangle with an independently specified radius per corner. */
+    roundedRectVarying(x: number, y: number, width: number, height: number, radiusTopLeft: number, radiusTopRight: number, radiusBottomRight: number, radiusBottomLeft: number, color: ARGBColor): void;
+    /** Per-corner-radius rectangle filled with a linear two-color gradient. */
+    roundedRectVaryingGradient(x: number, y: number, width: number, height: number, radiusTopLeft: number, radiusTopRight: number, radiusBottomRight: number, radiusBottomLeft: number, color1: ARGBColor, color2: ARGBColor, angleDegrees: number): void;
+
+    /** Draws the outline (border only) of a rectangle. */
+    rectOutline(x: number, y: number, width: number, height: number, thickness: number, color: ARGBColor): void;
+    /** Draws the outline (border only) of a rounded rectangle. */
+    roundedRectOutline(x: number, y: number, width: number, height: number, radius: number, thickness: number, color: ARGBColor): void;
+    /** Outline of a rounded rectangle with an independently specified radius per corner. */
+    roundedRectOutlineVarying(x: number, y: number, width: number, height: number, radiusTopLeft: number, radiusTopRight: number, radiusBottomRight: number, radiusBottomLeft: number, thickness: number, color: ARGBColor): void;
+    /** Draws a filled rectangle together with a stroke (border) of a separate color. */
+    rectStroke(x: number, y: number, width: number, height: number, strokeThickness: number, color: ARGBColor, strokeColor: ARGBColor): void;
+    /** Draws a rectangle outline together with a separately colored inner stroke. */
+    rectOutlineStroke(x: number, y: number, width: number, height: number, outlineThickness: number, strokeThickness: number, outlineColor: ARGBColor, strokeColor: ARGBColor): void;
+
+    /** Draws a rectangle filled with an animated rainbow gradient. */
+    rainbowRect(x: number, y: number, width: number, height: number): void;
+
+    /** Draws a soft box shadow behind a rounded-rectangle footprint. */
+    shadow(x: number, y: number, width: number, height: number, radius: number, blur: number, offsetX: number, offsetY: number, color: ARGBColor): void;
+    /** Fills a rounded rectangle with the blurred backdrop captured behind the UI (frosted-glass effect). */
+    blurFill(x: number, y: number, width: number, height: number, radius: number): void;
+    /** `blurFill` with an independently specified radius per corner. */
+    blurFillVarying(x: number, y: number, width: number, height: number, radiusTopLeft: number, radiusTopRight: number, radiusBottomRight: number, radiusBottomLeft: number): void;
+    /** Fills a rounded rectangle with the glow (bloom) pass texture — a soft glow around bright content. */
+    glowFill(x: number, y: number, width: number, height: number, radius: number): void;
+    /**
+     * Draws an inner glow along the inside edges of a rounded rectangle.
+     * **Advanced and visually unverified** — no native Opal UI callers yet;
+     * treat as experimental.
+     */
+    innerGlow(x: number, y: number, width: number, height: number, radius: number, spread: number, color: ARGBColor): void;
+
+    /** Loads an image from the client's resource path, returning a cached handle. Never `null` — a failed load yields a handle whose `isValid()` is `false`, so check that before drawing. */
+    loadImage(path: string): ScriptImage;
+    /** Draws a loaded image within the given bounds with optional corner rounding. Skipped silently outside an active render pass. */
+    image(handle: ScriptImage, x: number, y: number, width: number, height: number, radius: number): void;
+    /** Draws a loaded image multiplied by a tint color — useful for recoloring icons or fading images. */
+    imageTinted(handle: ScriptImage, x: number, y: number, width: number, height: number, radius: number, tint: ARGBColor): void;
+    /** Releases a GPU image previously obtained from `loadImage` and frees its backend resources. */
+    destroyImage(handle: ScriptImage): void;
+
+    /** Begins a new custom vector path. Subsequent `moveTo`/`lineTo`/`quadTo`/`cubicTo` calls build it. */
+    beginPath(): void;
+    /** Moves the current path cursor without drawing a segment. */
+    moveTo(x: number, y: number): void;
+    /** Adds a straight line segment from the cursor to the given point. */
+    lineTo(x: number, y: number): void;
+    /** Adds a quadratic bezier curve through control point `(cx, cy)` to `(x, y)`. */
+    quadTo(cx: number, cy: number, x: number, y: number): void;
+    /** Adds a cubic bezier curve through two control points to `(x, y)`. */
+    cubicTo(c1x: number, c1y: number, c2x: number, c2y: number, x: number, y: number): void;
+    /** Sets the stroke color used by the next `stroke()` call. */
+    strokeColor(color: ARGBColor): void;
+    /** Sets the stroke width used by the next `stroke()` call. */
+    strokeWidth(width: number): void;
+    /** Strokes the current path using the active stroke color and width. */
+    stroke(): void;
+    /** Closes the current path by connecting its last point back to its first. */
+    closePath(): void;
+
+    /** Draws a line of text and returns its rendered advance width. */
+    text(fontName: FontName, text: string, x: number, y: number, size: number, color: ARGBColor): number;
+    /** Draws a line of text with a drop shadow and returns its advance width. */
+    textShadow(fontName: FontName, text: string, x: number, y: number, size: number, color: ARGBColor): number;
+    /** Draws a line of text filled with a horizontal two-color gradient. */
+    textGradient(fontName: FontName, text: string, x: number, y: number, size: number, color1: ARGBColor, color2: ARGBColor): void;
+    /** Measures the rendered width of a string without drawing it. */
+    textWidth(fontName: FontName, text: string, size: number): number;
+    /** Measures the rendered height of a string without drawing it. */
+    textHeight(fontName: FontName, text: string, size: number): number;
+    /** Wraps a string into lines that each fit within `width`. */
+    wrapText(fontName: FontName, text: string, width: number, size: number): ScriptList<string>;
+    /** Trims a string to fit within `width`, appending an ellipsis if truncated. */
+    trimText(fontName: FontName, text: string, width: number, size: number): string;
+
+    /** Runs `content` under a uniform scale transform pivoted at the center of the given rectangle. */
+    scale(factor: number, x: number, y: number, width: number, height: number, content: RenderContent): void;
+    /** Translates the origin to the center of the given rectangle and rotates; `content` draws relative to the new origin. */
+    rotate(degrees: number, x: number, y: number, width: number, height: number, content: RenderContent): void;
+    /** Pushes a scissor/clip region, runs `content`, then pops it so nothing drawn inside escapes the clip bounds. */
+    scissor(x: number, y: number, width: number, height: number, content: RenderContent): void;
+    /** Sets the global alpha multiplier applied to all subsequent draws this frame (0.0 transparent .. 1.0 opaque). */
+    globalAlpha(alpha: number): void;
+
+    /** Packs r/g/b/a (0-255 each) into an ARGB integer. */
+    color(r: number, g: number, b: number, a: number): ARGBColor;
+    /** Packs r/g/b (0-255 each) into a fully opaque ARGB integer (alpha 255). */
+    color(r: number, g: number, b: number): ARGBColor;
+    /** Replaces the alpha channel of an ARGB color, preserving RGB. */
+    withAlpha(color: ARGBColor, alpha: number): ARGBColor;
+    /** Scales the alpha of an ARGB color by an opacity factor (0.0-1.0). */
+    applyOpacity(color: ARGBColor, opacity: number): ARGBColor;
+    /** Linearly interpolates between two ARGB colors (`factor` 0.0 = color1, 1.0 = color2). */
+    interpolate(color1: ARGBColor, color2: ARGBColor, factor: number): ARGBColor;
+    /** Darkens an ARGB color by the given factor. */
+    darker(color: ARGBColor, factor: number): ARGBColor;
+    /** Brightens an ARGB color by the given factor. */
+    brighter(color: ARGBColor, factor: number): ARGBColor;
+}
+declare const renderer: RendererProxy;
+
+/* ============================================================================
+ * palette — ui/palette.mdx
+ * ========================================================================== */
+
+/** A footer key hint shown at the bottom of an open palette view. */
+interface PaletteFooterHint {
+    key: string;
+    label: string;
+}
+
+/**
+ * Configuration object for `palette.createView`. `id` and `render` are
+ * required; everything else is optional. `Esc` always closes the view
+ * before any handler sees it — a view can never trap the user.
+ */
+interface PaletteViewConfig {
+    /** Unique view id. Passed to `openView` / `removeView`. */
+    id: string;
+    /**
+     * Draws one frame into the content rectangle. Called once per frame
+     * while the view is open. The canvas frame is already open and
+     * scissor-clipped to `[x, y, x + w, y + h]` when this runs. `dt` is
+     * wall-clock seconds since the previous frame (clamped to 0.1s max,
+     * `0.0` on the very first frame) — multiply velocities by it for
+     * framerate-independent motion.
+     */
+    render(x: number, y: number, w: number, h: number, dt: number): void;
+    /** Display title shown in the palette list (searchable). Defaults to `id`. */
+    title?: string;
+    /** Sub-text shown beside the title. Defaults to `"Script view"`. */
+    description?: string;
+    /** Placeholder text shown in the search row while the view is open. */
+    placeholder?: string;
+    /** Footer key hints, e.g. `[{ key: "Space", label: "Start" }]`. */
+    footer?: PaletteFooterHint[];
+    /** Handles a key press. Compare `keyCode` against the `keys` global. Return `true` to consume. `Esc` never reaches this handler. */
+    keyPressed?(keyCode: number, mods: number): boolean | void;
+    /** Handles a typed character (text input). Return `true` to consume. */
+    charTyped?(codepoint: number): boolean | void;
+    /** Handles a click in content-local coordinates (origin = top-left of the content rect). Return `true` to consume. */
+    mouseClicked?(localX: number, localY: number, button: number): boolean | void;
+}
+
+/**
+ * Registers a custom command-palette view: a canvas-backed surface your
+ * script draws and drives itself, hosted like a mini-app or game. A
+ * callback that throws is reported to chat once and then suppressed.
+ */
+interface PaletteProxy {
+    /** Creates and registers a view from a config object. Returns the view id, or `null` if the config was invalid. */
+    createView(config: PaletteViewConfig): string | null;
+    /** Opens the command palette directly into a previously registered view. Enables the command-palette module if needed. */
+    openView(id: string): void;
+    /** Unregisters a previously registered view so it no longer appears in the palette. */
+    removeView(id: string): void;
+}
+declare const palette: PaletteProxy;

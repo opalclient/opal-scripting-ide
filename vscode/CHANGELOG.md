@@ -6,6 +6,10 @@ All notable changes to the Opal Scripting VS Code extension are documented in th
 
 ### Changed
 
+- Ambient type definitions (`typings/opal-globals.d.ts`) are now synced from the canonical
+  `@opal-scripts/opal-types` package instead of being hand-maintained separately per editor. The
+  documented API surface is unchanged; this only fixes latent drift between the VS Code and
+  JetBrains copies and adds a provenance header pointing back at the canonical source.
 - **BREAKING: `entity.getName()` returns a `string`.** It used to return a Minecraft `Component`;
   the `TextComponent` type is gone along with the `entity.getName().getString()` idiom.
 - **BREAKING: there is no `mc.player` / `mc.world`.** Only `mc.getPlayer()` / `mc.getWorld()`
@@ -108,6 +112,11 @@ All notable changes to the Opal Scripting VS Code extension are documented in th
 - Snippets for the wave-1 surface: `opal-criteria` (a chat matcher), `opal-manifest` (the
   `// ==OpalScript==` header block), `opal-render` (a `renderScreen` handler using
   `getPartialTicks()`), and `opal-list` (`for..of` over a `ScriptList`).
+- `storage` global (`storage.set`/`get`/`remove`/`keys`) for small persistent per-script
+  key/value data. Values are plain strings (serialize with `JSON.stringify`/`JSON.parse`), a
+  missing key reads back as `null`, and writes are flushed atomically so a crash mid-write can
+  never tear a value. Capped at 32 keys, 64 characters per key, 8 KB per value, 64 KB total — a
+  write that would breach a cap throws rather than silently dropping data.
 
 ### Fixed
 

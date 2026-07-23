@@ -4,9 +4,9 @@ A JetBrains IDE plugin (IntelliJ IDEA / WebStorm) that improves the developer
 experience for writing [Opal](https://opal.wtf) scripts -- plain `.js` files
 run by Opal's GraalVM JavaScript scripting engine, which injects global proxy
 objects (`client`, `player`, `world`, `renderer`, `notification`, `overlay`,
-`modules`, `mc`, `movement`, `rotation`, `inventory`, `esp`, `palette`, plus
-bound types like `BlockPos`/`Vec2f`/`Color`/`MAIN_HAND`) into every script's
-scope at runtime -- no import/require step.
+`modules`, `mc`, `movement`, `rotation`, `inventory`, `esp`, `palette`,
+`storage`, plus bound types like `BlockPos`/`Vec2f`/`Color`/`MAIN_HAND`) into
+every script's scope at runtime -- no import/require step.
 
 ## Scope: what this is, and isn't
 
@@ -28,8 +28,8 @@ PSI layer required.
    hand-written ambient TypeScript declaration file covering every proxy
    global and its methods: `client`, `notification`, `overlay`, `modules`,
    `mc`, `player`, `movement`, `rotation`, `inventory`, `world`, `esp`,
-   `renderer`, `palette`, `keys`, the `module.on(...)` event map (with a
-   typed payload interface per event), the bound Java interop types
+   `renderer`, `palette`, `keys`, `storage`, the `module.on(...)` event map
+   (with a typed payload interface per event), the bound Java interop types
    (`Vec2f`, `BlockPos`, `Direction`, `RaytracedRotation`, `Color`,
    `MAIN_HAND`/`OFF_HAND`), and the `registerScript`/`registerModule`
    settings API. It is not a module (no top-level `import`/`export`), so it

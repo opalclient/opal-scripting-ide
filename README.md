@@ -3,9 +3,10 @@
 Editor tooling for writing [Opal](https://opal.wtf) scripts. Opal is a Minecraft utility client
 with a GraalVM JavaScript scripting engine. Scripts are plain `.js` files; the engine injects a set
 of global proxy objects (`client`, `player`, `world`, `renderer`, `notification`, `overlay`,
-`modules`, `mc`, `movement`, `rotation`, `inventory`, `esp`, `palette`, plus bound Java types like
-`BlockPos`/`Vec2f`/`Color`/`MAIN_HAND`) directly into a script's scope at runtime. There is no
-`import`/`require` step, which also means there is no built-in discoverability for the API surface.
+`modules`, `mc`, `movement`, `rotation`, `inventory`, `esp`, `palette`, `storage`, plus bound Java
+types like `BlockPos`/`Vec2f`/`Color`/`MAIN_HAND`) directly into a script's scope at runtime.
+There is no `import`/`require` step, which also means there is no built-in discoverability for the
+API surface.
 This repo's job is to give editors that discoverability back.
 
 This is a monorepo of two independent editor integrations built against the same scripting API:

@@ -3,8 +3,8 @@
 IntelliSense, snippets, and scaffolding for [Opal](https://opal.wtf)'s scripting engine: GraalVM
 JavaScript, hot-reloaded from `opal/scripts/`. Scripts are plain `.js` files; the engine injects
 global proxy objects (`client`, `player`, `world`, `renderer`, `notification`, `overlay`, `modules`,
-`mc`, `movement`, `rotation`, `inventory`, `esp`, `palette`, `keys`, plus bound types like
-`BlockPos`/`Vec2f`/`Color`/`MAIN_HAND`) directly into a script's scope at runtime; there's no
+`mc`, `movement`, `rotation`, `inventory`, `esp`, `palette`, `keys`, `storage`, plus bound types
+like `BlockPos`/`Vec2f`/`Color`/`MAIN_HAND`) directly into a script's scope at runtime; there's no
 `import`/`require` step. This extension exists to make that invisible API surface visible in the
 editor.
 
@@ -14,10 +14,10 @@ editor.
   other proxy shows the real method signature, parameter names/types, and a description sourced
   directly from Opal's scripting docs, in a plain `.js` file, with no changes to how you write
   scripts. This covers every proxy (`client`, `player`, `movement`, `rotation`, `world`, `inventory`,
-  `renderer`, `overlay`, `esp`, `modules`, `notification`, `palette`, `mc`), every event payload
-  (`preGameTick`, `renderScreen`, `preMovementPacket`, `chatReceived`, …), the `registerScript` /
-  `registerModule` / settings API, and the bound Java interop types (`Vec3d`, `Vec2f`, `BlockPos`,
-  `Direction`, `Color`, `MAIN_HAND`/`OFF_HAND`, `keys`).
+  `renderer`, `overlay`, `esp`, `modules`, `notification`, `palette`, `mc`, `storage`), every event
+  payload (`preGameTick`, `renderScreen`, `preMovementPacket`, `chatReceived`, …), the
+  `registerScript` / `registerModule` / settings API, and the bound Java interop types (`Vec3d`,
+  `Vec2f`, `BlockPos`, `Direction`, `Color`, `MAIN_HAND`/`OFF_HAND`, `keys`).
 - **Snippets** for the boilerplate you type constantly: a full script scaffold, a bare
   `registerModule` block, an event handler, each of the four setting types (bool/number/mode/group),
   a command-palette view registration, and a Dynamic Island overlay registration. Every snippet body

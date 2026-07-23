@@ -13,11 +13,12 @@ describing the same runtime API.
 
 The thing both plugins actually model is **Opal's scripting API surface**: a fixed set of ambient
 global objects (`client`, `player`, `world`, `renderer`, `notification`, `overlay`, `modules`, `mc`,
-`movement`, `rotation`, `inventory`, `esp`, `palette`, `keys`, plus bound Java types like `BlockPos`
-/ `Vec2f` / `Color` / `MAIN_HAND`) that Opal's GraalVM JS engine injects into every `.js` script at
-runtime. There is no import/require for any of it. The docs for that API live outside this repo, in
-the main Opal client repo at `resources/docs/en/scripting/` — every method signature declared in
-either plugin should trace back to a `<Method>` tag in those docs, not to guesswork.
+`movement`, `rotation`, `inventory`, `esp`, `palette`, `keys`, `storage`, plus bound Java types like
+`BlockPos` / `Vec2f` / `Color` / `MAIN_HAND`) that Opal's GraalVM JS engine injects into every
+`.js` script at runtime. There is no import/require for any of it. The docs for that API live
+outside this repo, in the main Opal client repo at `resources/docs/en/scripting/` — every method
+signature declared in either plugin should trace back to a `<Method>` tag in those docs, not to
+guesswork.
 
 ## Patterns that matter
 
