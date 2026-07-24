@@ -71,6 +71,13 @@ All notable changes to the Opal Scripting VS Code extension are documented in th
 
 ### Added
 
+- `renderer.drawPlayerHead(entity, x, y, size)` (draws a player's skin face + hat overlay; silent
+  no-op for a non-player/unresolvable entity), `player.getAttackCooldown()` (attack strength scale,
+  `0.0`-`1.0`; `1.0` with no local player), and five new `Entity` reads: `getHurtTime()` (`0` for a
+  non-living entity), `getPing()` (`-1` for a non-player/unknown), `getMainHandItem()` /
+  `getOffHandItem()` (`null` for a non-living entity; wrapped empty stack for an empty hand), and
+  `getArmorItems()` (feet -> legs -> chest -> head, always 4 entries for a living entity — humanoid
+  slots only; empty list otherwise).
 - `module.setBind(code)` / `getBind()` / `clearBind()`, letting a module claim a default key at
   registration — `module.setBind(keys.F7)`.
 - `keys.F1`–`keys.F12`, `keys.MOUSE_0`–`keys.MOUSE_4`, and `keys.NONE` (the unbound sentinel).
