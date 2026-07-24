@@ -71,6 +71,13 @@ All notable changes to the Opal Scripting VS Code extension are documented in th
 
 ### Added
 
+- The `net` proxy (`swing`, `heldSlot`, `playerCommand`, `playerAction`, `slotClick`) for curated
+  serverbound packet sends, `mc.interactionManager.interactEntity(entity, hand)` (the right-click
+  equivalent of `attackEntity`), and five cancellable pre-action events — `preBlockPlace`,
+  `preUseItem`, `preAttack`, `preInteractEntity`, `preSlotClick` — each exposing `isCancelled()`/
+  `cancel()`. `net.slotClick`'s `mode` and `preSlotClick.getMode()` share the same camelCase token
+  set (`pickup`/`quickMove`/`swap`/`clone`/`throw`/`quickCraft`/`pickupAll`); invalid action/mode
+  strings throw a host exception that is still catchable from a script's `try`/`catch`.
 - `renderer.drawPlayerHead(entity, x, y, size)` (draws a player's skin face + hat overlay; silent
   no-op for a non-player/unresolvable entity), `player.getAttackCooldown()` (attack strength scale,
   `0.0`-`1.0`; `1.0` with no local player), and five new `Entity` reads: `getHurtTime()` (`0` for a
