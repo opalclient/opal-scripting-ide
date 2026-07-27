@@ -71,6 +71,19 @@ All notable changes to the Opal Scripting VS Code extension are documented in th
 
 ### Added
 
+- Six new optional `PaletteViewConfig` callbacks — `mouseReleased`, `mouseMoved`, `mouseDragged`,
+  `mouseScrolled`, `keyReleased`, and `onClosed` (fired exactly once on teardown, regardless of how
+  the view closed) — plus a `pointerLock` flag that hides and locks the cursor for FPS-style
+  mouse-look while the view is open. `Esc` always releases the lock and closes the view first, so a
+  pointer-lock view can never trap the user.
+- The `input` global (`InputProxy`): `isKeyDown`, `isMouseDown`, `getMouseX`/`getMouseY`, and
+  `getMouseDeltaX`/`getMouseDeltaY`. The delta getters drain on read and report `0` unless a
+  `pointerLock` view is open. Prefer `input.isKeyDown` over pairing `keyPressed` with `keyReleased`
+  for held-key state — a release that never arrives (the view closes mid-hold, the window loses
+  focus) permanently desyncs a press-counter, while a poll has no state to desync.
+- `keyRelease` and `mouseRelease` module events (`KeyReleaseEvent`/`MouseReleaseEvent`), the
+  release-side twins of `keyPress`/`mousePress`, sharing the same `InteractionCodeEvent`
+  (`getCode()`) payload shape.
 - The `net` proxy (`swing`, `heldSlot`, `playerCommand`, `playerAction`, `slotClick`) for curated
   serverbound packet sends, `mc.interactionManager.interactEntity(entity, hand)` (the right-click
   equivalent of `attackEntity`), and five cancellable pre-action events — `preBlockPlace`,
