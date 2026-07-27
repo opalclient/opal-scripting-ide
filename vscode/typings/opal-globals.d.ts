@@ -1,3 +1,10 @@
+/*
+ * This file is a synced downstream copy, not the source of truth.
+ * Canonical: the opalclient/scripts repo, packages/opal-types/opal-globals.d.ts.
+ * Make scripting API changes there first, then resync this copy — do not
+ * hand-edit the API surface here.
+ */
+
 /**
  * Opal scripting engine — canonical ambient global type definitions.
  *
